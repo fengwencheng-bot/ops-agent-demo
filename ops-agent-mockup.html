@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intelligent Ops Agent v3 — Cursor Paradigm</title>
+<link rel="stylesheet" href="ops-agent.css?v=20260403g">
+<style>
+/* Inline overrides only — main styles in ops-agent.css */
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<!-- TOP NAV -->
+<nav class="top-nav">
+  <div class="tn-left">
+    <span class="tn-logo"><strong>Data Suite</strong></span>
+    <a class="tn-tab active">Scheduler</a>
+    <a class="tn-tab">SLA Manager</a>
+    <span class="env-badge">Prod</span>
+  </div>
+  <div class="tn-center">
+    <div class="tn-env">Data Infrastructure (regio) · di_scheduler <svg width="10" height="6" fill="currentColor"><path d="M0 0l5 5 5-5"/></svg></div>
+  </div>
+  <div class="tn-right">
+    <div class="tn-icon tn-agent-toggle" id="tnAgentToggle" onclick="toggleAgentPanel()" title="AI Agent"><svg width="18" height="18" viewBox="0 0 24 24" fill="rgba(255,255,255,.85)"><path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5z"/><path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" opacity=".8"/><path d="M6 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" opacity=".5"/></svg></div>
+    <div class="tn-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg><span class="badge"></span></div>
+    <div class="tn-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></div>
+    <div class="avatar">O</div>
+  </div>
+</nav>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+<!-- SIDEBAR -->
+<div class="sidebar" id="mainSidebar">
+  <div class="sb-content">
+    <div class="sb-title">Scheduler <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>
+    <div class="sb-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>Project Overview</div>
+    <div class="sb-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>Task Governance</div>
+    <div class="sb-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>Workflows</div>
+    <div class="sb-item active" id="nav-sched" onclick="switchView('view-tasklist')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Scheduled Tasks</div>
+    <div class="sb-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15h6"/></svg>Manual Tasks</div>
+    <div class="sb-item" id="nav-instances" onclick="switchView('view-all-instances')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>All Instances</div>
+    <div class="sb-item" id="nav-rerun" onclick="switchView('view-rerun-list')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>Rerun &amp; Backfill</div>
+    <div class="sb-item" id="nav-alarm" onclick="switchView('view-alarm-policy')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>Alarm Policy</div>
+    <div class="sb-item" id="nav-marker" onclick="switchView('view-marker-search')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>Marker Search</div>
+    <div class="sb-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Percept Analysis</div>
+    <div class="sb-divider"></div>
+    <div class="sb-title">SLA Manager <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>
+  </div>
+  <div class="sb-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 19l-7-7 7-7"/><path d="M18 19l-7-7 7-7" opacity=".4"/></svg>
+    <span class="sb-toggle-text">Collapse</span>
+  </div>
+</div>
+
+<!-- LEFT CONTENT AREA -->
+<div class="left-content">
+
+<!-- VIEW 1: Scheduled Tasks List (DEFAULT) -->
+<div class="left-view active" id="view-tasklist">
+  <div style="padding:16px 24px 0;font-size:16px;font-weight:600;color:#333;">Scheduled Tasks</div>
+  <div class="filter-section">
+    <div class="filter-item"><span class="filter-label">Task Name</span><input class="filter-input" placeholder="Enter Task Name"/></div>
+    <div class="filter-item"><span class="filter-label">Task Code</span><input class="filter-input" placeholder="Enter Task Code"/></div>
+    <div class="filter-item"><span class="filter-label">Workflow Name</span><input class="filter-input" placeholder="Enter Workflow Name"/></div>
+    <div style="margin-left:auto;display:flex;gap:6px;"><button class="btn-reset">Reset</button><button class="btn-search">Search</button></div>
+  </div>
+  <table class="data-table" id="task-list-table">
+    <thead><tr><th style="width:36px"><input type="checkbox" style="accent-color:#1890FF"/></th><th>Task Name</th><th>Task Code</th><th>Workflow Name</th><th>Last Executed (UTC+8)</th><th>Owner</th><th style="width:100px">Action</th></tr></thead>
+    <tbody id="task-list-tbody"></tbody>
+  </table>
+  <div class="pagination"><div class="pg-left">Batch Operate <svg width="10" height="6" fill="#8C8C8C"><path d="M0 0l5 5 5-5"/></svg></div><div class="pg-right"><span id="task-list-count">0 Results</span><button class="pg-btn disabled">&lt;</button><button class="pg-btn active">1</button><button class="pg-btn">&gt;</button><span>30/page</span></div></div>
+</div>
+
+<!-- VIEW 2: Instance Detail - Details Tab -->
+<div class="left-view" id="view-detail">
+  <div class="pg-breadcrumb"><a onclick="switchView('view-tasklist')">Scheduled Tasks</a> / <a onclick="switchView('view-taskview-matrix')">Task View</a> / <strong>Task Instance View</strong></div>
+  <div class="pg-title-row">
+    <div class="pg-title"><span class="status-badge failed">Failed</span> update_table <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8C8C" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+    <div class="pg-actions"><button class="btn-outline">Operate ▾</button><button class="btn-primary-sm">Edit (In Data Studio)</button></div>
+  </div>
+  <div class="pg-meta">
+    <span class="pg-meta-item">Source <span class="source-badge">Data Studio</span></span>
+    <span class="pg-meta-item">Task Type <span class="type-badge">Spark SQL</span></span>
+    <span class="pg-meta-item">Priority <span style="color:#333">⇌ 3</span></span>
+    <span class="pg-meta-item">Instance Type <span style="color:#333">Manual</span></span>
+    <span class="pg-meta-item" style="color:#8C8C8C">Instance Code <span style="color:#1890FF;cursor:pointer">di_scheduler.studio_6801187_20260403_DAY_2</span></span>
+  </div>
+  <div class="tab-bar">
+    <div class="tab-item active">Details</div>
+    <div class="tab-item" onclick="switchView('view-code')">Code</div>
+    <div class="tab-item">Output</div>
+    <div class="tab-item" onclick="switchView('view-syslog')">System Log</div>
+    <div class="tab-item">Operation Log</div>
+    <div class="tab-item" onclick="switchView('view-instance-lineage')">Lineage</div>
+    <div class="tab-item">Gantt Chart</div>
+    <div class="tab-item">Cascade Rerun</div>
+    <div class="tab-item">Spark</div>
+  </div>
+  <div class="inst-summary">
+    <div class="inst-metric"><div class="im-label">Elapsed Time ⓘ</div><div class="im-value">00:03:05</div><div class="im-sub">vs. L10E N/A</div></div>
+    <div class="inst-metric"><div class="im-label">Waiting Time ⓘ</div><div class="im-value">00:00:09</div><div class="im-sub">vs. L10E N/A</div></div>
+    <div class="inst-metric"><div class="im-label">Execution Time ⓘ</div><div class="im-value">00:02:55</div><div class="im-sub">vs. L10E N/A</div></div>
+    <div class="inst-metric"><div class="im-label">Memory Utilisation ⓘ</div><div class="im-value">10.56%</div><div class="im-sub">(3.48 / 33 GB)</div></div>
+    <div class="inst-metric"><div class="im-label">CPU Time</div><div class="im-value">18 Sec</div><div class="im-sub">vs. L10E N/A</div></div>
+    <div class="cost-card"><div style="font-size:11px;color:#52C41A;">Cost ⓘ</div><div style="font-size:18px;font-weight:600;color:#333;">< $0.01</div></div>
+  </div>
+  <div class="info-section" style="display:flex;gap:0;">
+    <div style="flex:1;">
+      <div class="info-section-title">Summary</div>
+      <div style="display:flex;gap:16px;margin-bottom:12px;font-size:13px;">
+        <span>Status <span class="status-badge failed" style="margin-left:4px">Failed</span></span>
+        <span style="color:#1890FF;cursor:pointer" onclick="switchView('view-syslog')">▶ View System Log</span>
+      </div>
+      <div style="font-size:13px;color:#595959;margin-bottom:8px;">
+        <span>Yarn Application ID: <span style="color:#333">application_1773041251148_6338254</span></span>
+        <span style="margin-left:12px;"><a class="link">Tracking URL</a></span>
+      </div>
+      <div style="font-size:13px;color:#595959;margin-bottom:4px;">Output Marker Instance: <a class="link">di_scheduler.update_table</a> <span style="color:#52C41A">●</span> 20260402 | Daily | 2026-04-03 10:41:52 (UTC+8)</div>
+      <div style="font-size:13px;color:#595959;"><span style="margin-left:164px;"><a class="link">di_scheduler.studio_6801187</a> <span style="color:#52C41A">●</span> 20260402 | Daily | 2026-04-03 10:41:52 (UTC+8)</span></div>
+    </div>
+    <div style="width:200px;border-left:1px solid #F0F0F0;padding-left:16px;">
+      <div style="font-size:12px;color:#8C8C8C;margin-bottom:8px;">›</div>
+      <div style="font-size:13px;color:#333;padding:4px 0;cursor:pointer;border-radius:4px;" class="detail-anchor active-anchor">○ Summary</div>
+      <div style="font-size:13px;color:#595959;padding:4px 0;cursor:pointer;">○ Instance Information</div>
+      <div style="font-size:13px;color:#595959;padding:4px 0;cursor:pointer;">○ Dependency Information</div>
+      <div style="font-size:13px;color:#595959;padding:4px 0;cursor:pointer;">○ Execution Information</div>
+      <div style="font-size:13px;color:#595959;padding:4px 0;cursor:pointer;">○ Alarm and Timeout Information</div>
+      <div style="font-size:13px;color:#595959;padding:4px 0;cursor:pointer;">○ Spark Parameters</div>
+    </div>
+  </div>
+  <div class="info-section">
+    <div class="info-section-title">Instance Information</div>
+    <div class="info-grid">
+      <div class="info-row"><span class="info-key">Task Name</span><span class="info-val">update_table</span></div>
+      <div class="info-row"><span class="info-key">Instance Code</span><span class="info-val link">di_scheduler.studio_6801187_20260403_DAY_2</span></div>
+      <div class="info-row"><span class="info-key">Task Code</span><span class="info-val"><a class="link" onclick="switchView('view-taskview-matrix')">di_scheduler.studio_6801187</a></span></div>
+      <div class="info-row"><span class="info-key">Workflow</span><span class="info-val">-</span></div>
+      <div class="info-row"><span class="info-key">Owner</span><span class="info-val">wu.chen@shopee.com</span></div>
+      <div class="info-row"><span class="info-key">Task Type</span><span class="info-val"><span class="type-badge">Spark SQL</span></span></div>
+      <div class="info-row"><span class="info-key">Source</span><span class="info-val">Data Studio</span></div>
+      <div class="info-row"><span class="info-key">Instance Type</span><span class="info-val">Manual</span></div>
+      <div class="info-row"><span class="info-key">Priority</span><span class="info-val">⇌ 3 (Medium)</span></div>
+      <div class="info-row"><span class="info-key">Scheduled Time</span><span class="info-val">2026-04-03 05:20:00 (UTC+8)</span></div>
+      <div class="info-row"><span class="info-key">Project Name</span><span class="info-val">di_scheduler</span></div>
+      <div class="info-row"><span class="info-key">Project Code</span><span class="info-val">di_scheduler</span></div>
+      <div class="info-row"><span class="info-key">Event Code</span><span class="info-val"><a class="link" onclick="switchView('view-event')">20260403103847_wu.chen_MANUAL</a></span></div>
+      <div class="info-row"><span class="info-key">Autotune ⓘ</span><span class="info-val">On</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW 3: Instance Detail - System Log -->
+<div class="left-view" id="view-syslog">
+  <div class="pg-breadcrumb"><a onclick="switchView('view-tasklist')">Scheduled Tasks</a> / <a onclick="switchView('view-taskview-matrix')">Task View</a> / <strong>Task Instance View</strong></div>
+  <div class="pg-title-row"><div class="pg-title"><span class="status-badge failed">Failed</span> update_table</div><div class="pg-actions"><button class="btn-outline">Operate ▾</button><button class="btn-primary-sm">Edit (In Data Studio)</button></div></div>
+  <div class="pg-meta"><span class="pg-meta-item">Source <span class="source-badge">Data Studio</span></span><span class="pg-meta-item">Task Type <span class="type-badge">Spark SQL</span></span><span class="pg-meta-item">Priority ⇌ 3</span><span class="pg-meta-item" style="color:#8C8C8C">Instance Code <span style="color:#1890FF">di_scheduler.studio_6801187_20260403_DAY_2</span></span></div>
+  <div class="tab-bar">
+    <div class="tab-item" onclick="switchView('view-detail')">Details</div>
+    <div class="tab-item" onclick="switchView('view-code')">Code</div>
+    <div class="tab-item">Output</div>
+    <div class="tab-item active">System Log</div>
+    <div class="tab-item">Operation Log</div>
+    <div class="tab-item" onclick="switchView('view-instance-lineage')">Lineage</div>
+    <div class="tab-item">Gantt Chart</div>
+    <div class="tab-item">Cascade Rerun</div>
+    <div class="tab-item">Spark</div>
+  </div>
+  <div class="syslog-container">
+    <div class="syslog-toolbar">
+      <span>Instance: di_scheduler.studio_6801187_20260403_DAY_2</span>
+      <span style="margin-left:auto;">Host: 10.169.9.208</span>
+    </div>
+    <div class="syslog-content">
+<div class="log-section">Task Output</div>
+<div class="log-line"><span class="lt">2026-04-03 07:01:01 (UTC+8)</span> <span class="li">[INFO]</span> Task update_table started. Instance: di_scheduler.studio_6801187_20260403_DAY_2</div>
+<div class="log-line"><span class="lt">2026-04-03 07:01:02 (UTC+8)</span> <span class="li">[INFO]</span> Submitting Spark application to queue: prod_default</div>
+<div class="log-line"><span class="lt">2026-04-03 07:01:05 (UTC+8)</span> <span class="li">[INFO]</span> Spark application submitted. App ID: application_1711929600_28451</div>
+<div class="log-line"><span class="lt">2026-04-03 07:01:08 (UTC+8)</span> <span class="li">[INFO]</span> Spark application running. Allocated 4 executors (8GB each).</div>
+<div class="log-line"><span class="lt">2026-04-03 07:03:22 (UTC+8)</span> <span class="li">[INFO]</span> Upload task output to s3 with sync, outputObjectKey: task-exec/di_scheduler.studio_6801187_20260403_DAY_2/run.output</div>
+<div class="log-line"><span class="lt">2026-04-03 07:03:22 (UTC+8)</span> <span class="li">[INFO]</span> Shell finished</div>
+<div class="log-line"><span class="lt">2026-04-03 07:03:22 (UTC+8)</span> <span class="li">[INFO]</span> Returning data</div>
+<div class="log-line"><span class="lt">2026-04-03 07:03:22 (UTC+8)</span> <span class="li">[INFO]</span> No post-task command</div>
+<hr class="log-divider">
+<div class="log-section">Data Quality Check</div>
+<div class="log-line"><span class="lt">2026-04-03 07:06:45 (UTC+8)</span> <span class="li">[INFO]</span> Stage 2/3 running. Shuffle read: 12.4 GB</div>
+<div class="log-line"><span class="lt">2026-04-03 07:10:11 (UTC+8)</span> <span class="lw">[WARN]</span> Executor 2: GC overhead limit exceeded. GC time: 98%</div>
+<div class="log-line highlighted"><span class="lt">2026-04-03 07:12:33 (UTC+8)</span> <span class="le">[ERROR]</span> Executor 2 lost: Container killed by YARN for exceeding memory limits. 8.1 GB of 8 GB physical memory used.</div>
+<hr class="log-divider">
+<div class="log-section">Create Output Marker</div>
+<div class="log-line"><span class="lt">2026-04-03 07:12:34 (UTC+8)</span> <span class="li">[INFO]</span> Prepare output marker for task instance: di_scheduler.studio_6801187_20260403_DAY_2</div>
+<div class="log-line"><span class="lt">2026-04-03 07:12:34 (UTC+8)</span> <span class="li">[INFO]</span> Successfully created marker. name: dev_di_scheduler.studio_2788726, offset:20260403161545</div>
+<div class="log-line"><span class="lt">2026-04-03 07:15:08 (UTC+8)</span> <span class="li">[INFO]</span> Create output marker successfully</div>
+<hr class="log-divider">
+<div class="log-section">Task Execution Success</div>
+<div class="log-line"><span class="lt">2026-04-03 07:18:47 (UTC+8)</span> <span class="li">[INFO]</span> Whole task execution ended</div>
+<div class="log-line"><span class="lt">2026-04-03 07:18:47 (UTC+8)</span> <span class="li">[INFO]</span> Total Elapse time: [27941]ms</div>
+<div class="log-line"><span class="lt">2026-04-03 07:18:48 (UTC+8)</span> <span class="li">[INFO]</span> &lt;exec-log-eof&gt;</div>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW 4: Instance Detail - Code -->
+<div class="left-view" id="view-code">
+  <div class="pg-breadcrumb"><a onclick="switchView('view-tasklist')">Scheduled Tasks</a> / <a onclick="switchView('view-taskview-matrix')">Task View</a> / <strong>Task Instance View</strong></div>
+  <div class="pg-title-row"><div class="pg-title"><span class="status-badge failed">Failed</span> update_table</div><div class="pg-actions"><button class="btn-outline">Operate ▾</button><button class="btn-primary-sm">Edit (In Data Studio)</button></div></div>
+  <div class="pg-meta"><span class="pg-meta-item">Source <span class="source-badge">Data Studio</span></span><span class="pg-meta-item">Task Type <span class="type-badge">Spark SQL</span></span><span class="pg-meta-item">Priority ⇌ 3</span></div>
+  <div class="tab-bar">
+    <div class="tab-item" onclick="switchView('view-detail')">Details</div>
+    <div class="tab-item active">Code</div>
+    <div class="tab-item">Output</div>
+    <div class="tab-item" onclick="switchView('view-syslog')">System Log</div>
+    <div class="tab-item">Operation Log</div>
+    <div class="tab-item" onclick="switchView('view-instance-lineage')">Lineage</div>
+    <div class="tab-item">Gantt Chart</div>
+    <div class="tab-item">Cascade Rerun</div>
+    <div class="tab-item">Spark</div>
+  </div>
+  <div class="code-view-wrap">
+  <div class="code-toolbar">
+    <div class="code-toolbar-left">Code Version: <span>57</span></div>
+    <div class="code-toolbar-right">
+      <button class="code-tool-btn" title="Full Screen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg></button>
+      <button class="code-tool-btn" title="Increase Font"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></button>
+      <button class="code-tool-btn" title="Decrease Font"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></button>
+      <button class="code-tool-btn" title="Prev"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></button>
+      <button class="code-tool-btn" title="Next"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+    </div>
+  </div>
+  <div class="code-container">
+<div><span class="cm">-- update_table: Daily order data aggregation</span></div>
+<div><span class="cm">-- Owner: bryann.yeapkk@shopee.com</span></div>
+<div>&nbsp;</div>
+<div><span class="kw">INSERT OVERWRITE TABLE</span> dwd.order_detail</div>
+<div><span class="kw">PARTITION</span> (dt = <span class="str">'${bizdate}'</span>)</div>
+<div><span class="kw">SELECT</span></div>
+<div>    o.order_id,</div>
+<div>    o.user_id,</div>
+<div>    p.product_name,</div>
+<div>    p.category,</div>
+<div>    o.amount,</div>
+<div>    o.currency,</div>
+<div>    u.country,</div>
+<div>    u.register_date,</div>
+<div class="code-line-hl">    <span class="fn">COLLECT_LIST</span>(<span class="kw">STRUCT</span>(o.item_id, o.quantity, o.unit_price)) <span class="kw">AS</span> items,  <span class="cm">-- Data skew risk: high-volume sellers</span></div>
+<div>    o.create_time,</div>
+<div>    o.update_time</div>
+<div><span class="kw">FROM</span> ods.raw_order_data o</div>
+<div class="code-line-hl"><span class="kw">JOIN</span> ods.product_catalog p <span class="kw">ON</span> o.product_id = p.product_id  <span class="cm">-- Full JOIN, table p is 2.8GB</span></div>
+<div><span class="kw">JOIN</span> dim.user_info u <span class="kw">ON</span> o.user_id = u.user_id</div>
+<div><span class="kw">WHERE</span> o.dt = <span class="str">'${bizdate}'</span></div>
+<div>  <span class="kw">AND</span> o.status <span class="kw">IN</span> (<span class="str">'COMPLETED'</span>, <span class="str">'REFUNDED'</span>)</div>
+<div><span class="kw">DISTRIBUTE BY</span> o.user_id</div>
+  </div>
+  </div>
+</div>
+
+<!-- VIEW 5: Event View -->
+<div class="left-view" id="view-event">
+  <div class="pg-breadcrumb"><a onclick="switchView('view-rerun-list')">Rerun &amp; Backfill</a> / <strong>Event View</strong></div>
+  <div class="pg-title-row"><div class="pg-title"><span class="status-badge success">Successful</span> 20260401172538824_wu.chen_RERUN</div><div class="pg-actions"><span style="font-size:13px;color:#595959;margin-right:8px;">Concurrency</span><button class="btn-outline">Operate ▾</button></div></div>
+  <div class="summary-row">
+    <div class="summary-card"><div class="sc-label">Total Instances ⓘ</div><div class="sc-value">4</div></div>
+    <div class="summary-card"><div class="sc-label">Launching ⓘ</div><div class="sc-value">0</div></div>
+    <div class="summary-card"><div class="sc-label">Waiting ⓘ</div><div class="sc-value">0</div></div>
+    <div class="summary-card"><div class="sc-label">Running ⓘ</div><div class="sc-value">0</div></div>
+    <div class="summary-card"><div class="sc-label">Successful</div><div class="sc-value green">4</div></div>
+    <div class="summary-card"><div class="sc-label">Failed</div><div class="sc-value">0</div></div>
+    <div class="summary-card"><div class="sc-label">Concurrency</div><div class="sc-value">10</div></div>
+  </div>
+  <div class="tab-bar">
+    <div class="tab-item active">All Instances</div>
+    <div class="tab-item">Event Details</div>
+    <div class="tab-item">Pause and Resume</div>
+    <div class="tab-item">Operation Log</div>
+  </div>
+  <div class="filter-section">
+    <div class="filter-item"><span class="filter-label">Task Name</span><input class="filter-input" placeholder="Enter Task Name"/></div>
+    <div class="filter-item"><span class="filter-label">Instance Code ⓘ</span><input class="filter-input" placeholder="Enter Instance Code"/></div>
+    <div class="filter-item"><span class="filter-label">Status</span><select class="filter-select"><option>Select Status</option></select></div>
+    <div style="margin-left:auto;display:flex;gap:6px;"><button class="btn-reset">Reset</button><button class="btn-search">Search</button></div>
+  </div>
+  <table class="data-table">
+    <thead><tr><th style="width:36px"><input type="checkbox" style="accent-color:#1890FF"/></th><th>Task Name</th><th>Instance Code</th><th>Status</th><th>Latest Status</th><th>Instance Type</th><th>Task Code</th><th>Wo...</th><th style="width:120px">Action</th></tr></thead>
+    <tbody>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td>ads_result6</td><td><a class="link" onclick="switchView('view-detail')">di_scheduler.studio_6030135_20260401_DAY_2</a></td><td><span class="status-badge success">Successful</span></td><td><span class="status-badge success">Successful</span></td><td>Rerun</td><td><a class="link" onclick="switchView('view-taskview-matrix')">di_scheduler.studio_6030135</a></td><td>sla_exa...</td><td><div class="action-cell"><button class="act-btn">⟳</button><button class="act-btn">⟲</button><button class="act-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="act-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg></button><button class="act-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></button><button class="act-btn">···</button></div></td></tr>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td>ads_t7</td><td><a class="link" onclick="switchView('view-detail')">di_scheduler.studio_6030058_20260401_DAY_2</a></td><td><span class="status-badge success">Successful</span></td><td><span class="status-badge success">Successful</span></td><td>Rerun</td><td><a class="link" onclick="switchView('view-taskview-matrix')">di_scheduler.studio_6030058</a></td><td>sla_exa...</td><td><div class="action-cell"><button class="act-btn">⟳</button><button class="act-btn">⟲</button><button class="act-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="act-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg></button><button class="act-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></button><button class="act-btn">···</button></div></td></tr>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td>ads_t9</td><td><a class="link" onclick="switchView('view-detail')">di_scheduler.studio_6030059_20260401_DAY_2</a></td><td><span class="status-badge success">Successful</span></td><td><span class="status-badge success">Successful</span></td><td>Rerun</td><td><a class="link" onclick="switchView('view-taskview-matrix')">di_scheduler.studio_6030059</a></td><td>sla_exa...</td><td><div class="action-cell"><button class="act-btn">⟳</button><button class="act-btn">⟲</button><button class="act-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="act-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg></button><button class="act-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></button><button class="act-btn">···</button></div></td></tr>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td>ads_t8</td><td><a class="link" onclick="switchView('view-detail')">di_scheduler.studio_6030060_20260401_DAY_2</a></td><td><span class="status-badge success">Successful</span></td><td><span class="status-badge success">Successful</span></td><td>Rerun</td><td><a class="link" onclick="switchView('view-taskview-matrix')">di_scheduler.studio_6030060</a></td><td>sla_exa...</td><td><div class="action-cell"><button class="act-btn">⟳</button><button class="act-btn">⟲</button><button class="act-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="act-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg></button><button class="act-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></button><button class="act-btn">···</button></div></td></tr>
+    </tbody>
+  </table>
+  <div class="pagination"><div class="pg-left">Batch Operate <svg width="10" height="6" fill="#8C8C8C"><path d="M0 0l5 5 5-5"/></svg></div><div class="pg-right"><span>4 Results</span><button class="pg-btn disabled">&lt;</button><button class="pg-btn active">1</button><button class="pg-btn disabled">&gt;</button><span>10/page</span></div></div>
+</div>
+
+<!-- VIEW 6: Task View - Matrix View -->
+<div class="left-view" id="view-taskview-matrix">
+  <div class="pg-breadcrumb"><a onclick="switchView('view-tasklist')">Scheduled Tasks</a> / <strong>Task View</strong></div>
+  <div class="pg-title-row">
+    <div class="pg-title">update_table <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8C8C" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div>
+    <div class="pg-actions"><span style="font-size:12px;color:#8C8C8C;margin-right:8px;">Last updated: 2026-04-03 14:12:53</span><button class="btn-outline">Operate ▾</button><button class="btn-primary-sm">Edit (In Data Studio)</button></div>
+  </div>
+  <div class="pg-meta">
+    <span class="pg-meta-item">Source <span class="source-badge">Data Studio</span></span>
+    <span class="pg-meta-item">Task Type <span class="type-badge">Spark SQL</span></span>
+    <span class="pg-meta-item">Priority <span style="color:#333">⇌ 3</span></span>
+    <span class="pg-meta-item" style="color:#8C8C8C">Task Code <span style="color:#1890FF">di_scheduler.studio_6801187 <span style="cursor:pointer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></span></span></span>
+  </div>
+  <div class="tab-bar">
+    <div class="tab-item active">Matrix View</div>
+    <div class="tab-item" onclick="switchView('view-taskview-list')">List View</div>
+    <div class="tab-item" onclick="switchView('view-lineage')">Lineage</div>
+    <div class="tab-item">Gantt Chart</div>
+    <div class="tab-item">Runtime Trend</div>
+    <div class="tab-item">Details</div>
+    <div class="tab-item">Code</div>
+    <div class="tab-item">Output Config</div>
+    <div class="tab-item">Operation Log</div>
+    <div class="tab-item">Privilege</div>
+    <div class="tab-item" onclick="switchView('view-taskview-alarm')">Alarm</div>
+    <div class="tab-item">Backfill</div>
+    <div class="tab-item">Spark</div>
+    <div class="tab-item">SLA & DR</div>
+  </div>
+  <div style="padding:12px 24px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #F0F0F0;">
+    <div class="filter-item"><span class="filter-label">Business Time</span><input class="filter-input" value="2026-03-20" style="width:100px"/></div>
+    <span style="color:#8C8C8C;font-size:12px;">→</span>
+    <div class="filter-item"><span class="filter-label">End Time</span><input class="filter-input" placeholder="" style="width:100px"/></div>
+    <div class="filter-item" style="margin-left:24px;"><span class="filter-label">Instance Code</span><input class="filter-input" placeholder="Enter Task Instance Code" style="width:180px"/></div>
+    <label style="font-size:12px;color:#595959;display:flex;align-items:center;gap:4px;margin-left:auto;"><input type="checkbox" checked style="accent-color:#1890FF"/> Include waiting time</label>
+    <span style="font-size:12px;color:#8C8C8C;">↕ Business Time</span>
+  </div>
+  <div style="padding:8px 24px;display:flex;align-items:center;gap:12px;font-size:12px;color:#595959;border-bottom:1px solid #F0F0F0;">
+    <span>○ No Status</span>
+    <span>◎ Waiting</span>
+    <span>⊙ Skipped</span>
+    <span style="color:#1890FF">● Running</span>
+    <span style="color:#52C41A">● Successful</span>
+    <span style="color:#FF4D4F">● Failed</span>
+    <span style="margin-left:auto;color:#1890FF;cursor:pointer">↻ Refresh</span>
+    <span style="color:#8C8C8C">Auto (Off)</span>
+    <span style="color:#8C8C8C;cursor:pointer">⚙</span>
+  </div>
+  <div style="flex:1;padding:24px;overflow-y:auto;">
+    <div style="display:flex;align-items:flex-end;gap:4px;margin-bottom:20px;">
+      <div style="font-size:11px;color:#8C8C8C;writing-mode:vertical-lr;text-orientation:mixed;transform:rotate(180deg);margin-right:4px;height:80px;display:flex;align-items:center;">4 min</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+        <div style="font-size:10px;color:#8C8C8C;">Apr 3, 00:00</div>
+        <div style="display:flex;gap:2px;align-items:flex-end;">
+          <div style="width:24px;height:60px;background:#52C41A;border-radius:3px 3px 0 0;cursor:pointer;" title="3.2 min - Successful"></div>
+          <div style="width:24px;height:35px;background:#52C41A;border-radius:3px 3px 0 0;cursor:pointer;" onclick="switchView('view-detail')" title="1.6 min - Successful (Click to view)"></div>
+        </div>
+      </div>
+    </div>
+    <table class="data-table" style="margin-top:0;">
+      <tbody>
+        <tr><td style="padding-left:24px;"><input type="checkbox" style="accent-color:#1890FF;margin-right:12px;"/> update_table</td><td style="text-align:right;">
+          <div style="display:inline-flex;gap:2px;">
+            <div style="width:18px;height:18px;background:#52C41A;border-radius:3px;cursor:pointer;" onclick="switchView('view-detail')" title="Successful - Click to view instance"></div>
+          </div>
+        </td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- VIEW 7: Task View - List View -->
+<div class="left-view" id="view-taskview-list">
+  <div class="pg-breadcrumb"><a onclick="switchView('view-tasklist')">Scheduled Tasks</a> / <strong>Task View</strong></div>
+  <div class="pg-title-row">
+    <div class="pg-title">update_table <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8C8C" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div>
+    <div class="pg-actions"><span style="font-size:12px;color:#8C8C8C;margin-right:8px;">Last updated: 2026-04-03 14:12:53</span><button class="btn-outline">Operate ▾</button><button class="btn-primary-sm">Edit (In Data Studio)</button></div>
+  </div>
+  <div class="pg-meta">
+    <span class="pg-meta-item">Source <span class="source-badge">Data Studio</span></span>
+    <span class="pg-meta-item">Task Type <span class="type-badge">Spark SQL</span></span>
+    <span class="pg-meta-item">Priority <span style="color:#333">⇌ 3</span></span>
+    <span class="pg-meta-item" style="color:#8C8C8C">Task Code <span style="color:#1890FF">di_scheduler.studio_6801187 <span style="cursor:pointer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></span></span></span>
+  </div>
+  <div class="tab-bar">
+    <div class="tab-item" onclick="switchView('view-taskview-matrix')">Matrix View</div>
+    <div class="tab-item active">List View</div>
+    <div class="tab-item" onclick="switchView('view-lineage')">Lineage</div>
+    <div class="tab-item">Gantt Chart</div>
+    <div class="tab-item">Runtime Trend</div>
+    <div class="tab-item">Details</div>
+    <div class="tab-item">Code</div>
+    <div class="tab-item">Output Config</div>
+    <div class="tab-item">Operation Log</div>
+    <div class="tab-item">Privilege</div>
+    <div class="tab-item" onclick="switchView('view-taskview-alarm')">Alarm</div>
+    <div class="tab-item">Backfill</div>
+    <div class="tab-item">Spark</div>
+    <div class="tab-item">SLA & DR</div>
+  </div>
+  <div style="padding:12px 24px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #F0F0F0;">
+    <div class="filter-item"><span class="filter-label">Business Time</span><input class="filter-input" value="2026-03-20" style="width:100px"/></div>
+    <span style="color:#8C8C8C;font-size:12px;">→ Select</span>
+    <div class="filter-item" style="margin-left:24px;"><span class="filter-label">Instance Code</span><input class="filter-input" placeholder="Enter Task Instance C..." style="width:160px"/></div>
+    <span style="margin-left:auto;font-size:12px;color:#8C8C8C;cursor:pointer;">⚙ ↻</span>
+  </div>
+  <table class="data-table">
+    <thead><tr><th style="width:36px"><input type="checkbox" style="accent-color:#1890FF"/></th><th>Task Instance Code</th><th>Instance Type</th><th>Business Time (UTC+8) ↕</th><th>Status ▽</th><th>Create Time (UTC+8)</th><th>Start Time (UTC+8) ↕</th><th>End Time (UTC+8) ↕</th><th>Duration</th></tr></thead>
+    <tbody>
+      <tr style="background:#FFF1F0;"><td><input type="checkbox" style="accent-color:#1890FF"/></td><td><a class="link" onclick="navToInstance('di_scheduler.studio_6801187_20260403_DAY_2')">di_scheduler.studio_6801187_20260403_DAY_2</a></td><td>Schedule</td><td>2026-04-03 00:00:00</td><td><span class="status-badge failed">Failed</span></td><td>2026-04-03 07:00:01</td><td>2026-04-03 07:00:05</td><td>2026-04-03 07:18:32</td><td>00:18:27</td></tr>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td><a class="link" onclick="navToInstance('di_scheduler.studio_6801187_20260403_DAY_1')">di_scheduler.studio_6801187_20260403_DAY_1</a></td><td>Schedule</td><td>2026-04-03 00:00:00</td><td><span class="status-badge success">Successful</span></td><td>2026-04-03 03:00:01</td><td>2026-04-03 03:00:05</td><td>2026-04-03 03:15:22</td><td>00:15:17</td></tr>
+    </tbody>
+  </table>
+  <div class="pagination"><div class="pg-left">Batch Operate <svg width="10" height="6" fill="#8C8C8C"><path d="M0 0l5 5 5-5"/></svg></div><div class="pg-right"><span>2 Search Results</span><button class="pg-btn disabled">&lt;</button><button class="pg-btn active">1</button><button class="pg-btn disabled">&gt;</button><span>10/page</span></div></div>
+</div>
+
+<!-- VIEW 8: Rerun & Backfill List -->
+<div class="left-view" id="view-rerun-list">
+  <div style="padding:16px 24px 0;font-size:16px;font-weight:600;color:#333;">Rerun & Backfill</div>
+  <div class="filter-section">
+    <div class="filter-item"><span class="filter-label">Event Code</span><input class="filter-input" placeholder="Enter Event Code"/></div>
+    <div class="filter-item"><span class="filter-label">Event Name</span><input class="filter-input" placeholder="Enter Event Name"/></div>
+    <div class="filter-item"><span class="filter-label">Status</span><select class="filter-select"><option>Select Status</option></select></div>
+    <div class="filter-item"><span class="filter-label">Event Type</span><select class="filter-select"><option>Select Event Type</option></select></div>
+    <div class="filter-item"><span class="filter-label">Operator</span><input class="filter-input" placeholder="Enter Operator"/></div>
+    <div style="margin-left:auto;display:flex;gap:6px;align-items:center;"><span style="font-size:12px;color:#1890FF;cursor:pointer;">▾ Collapse</span><button class="btn-reset">Reset</button><button class="btn-search">Search</button></div>
+  </div>
+  <div style="padding:8px 24px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #F0F0F0;">
+    <label style="font-size:12px;color:#595959;display:flex;align-items:center;gap:4px;"><input type="checkbox" style="accent-color:#1890FF"/> My Event</label>
+    <span style="margin-left:auto;font-size:12px;color:#8C8C8C;cursor:pointer;">⚙ ↻</span>
+  </div>
+  <table class="data-table">
+    <thead><tr><th style="width:36px"><input type="checkbox" style="accent-color:#1890FF"/></th><th>Event Code</th><th>Event Name</th><th>Status</th><th>Event Type</th><th>Concurrency</th><th>Operator</th><th>Create Time ↕</th></tr></thead>
+    <tbody>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td><a class="link" onclick="switchView('view-event')">20260401172538824_wu.chen_RERUN</a></td><td>20260401_RERUN_dwm_t1</td><td><span class="status-badge success">Successful</span></td><td>Rerun</td><td>10</td><td>wu.chen</td><td>2026-04-01 17:25:38</td></tr>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td><a class="link" onclick="switchView('view-event')">20260401172333965_wu.chen_RERUN</a></td><td>20260401_RERUN_dwm_t1</td><td><span class="status-badge failed">Failed</span></td><td>Rerun</td><td>1</td><td>wu.chen</td><td>2026-04-01 17:23:33</td></tr>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td><a class="link" onclick="switchView('view-event')">20260401102556869_shanjing.lim_RERUN</a></td><td>20260401_RERUN_collate_task_optimisation_uptake</td><td><span class="status-badge success">Successful</span></td><td>Rerun</td><td>1</td><td>shanjing.lim</td><td>2026-04-01 10:25:56</td></tr>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td><a class="link" onclick="switchView('view-event')">20260331151723141_yaohua.li_BACK_FILL</a></td><td>20260331_BACKFILL_latest_only_daily</td><td><span class="status-badge failed">Failed</span></td><td>Backfill</td><td>1</td><td>yaohua.li</td><td>2026-03-31 15:17:23</td></tr>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td><a class="link" onclick="switchView('view-event')">20260331145227958_yaohua.li_BACK_FILL</a></td><td>20260331_BACKFILL_runtime_daily</td><td><span class="status-badge success">Successful</span></td><td>Backfill</td><td>1</td><td>yaohua.li</td><td>2026-03-31 14:52:27</td></tr>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td><a class="link" onclick="switchView('view-event')">20260331144822146_yaohua.li_BACK_FILL</a></td><td>20260331_BACKFILL_runtime_wf_shell</td><td><span class="status-badge success">Successful</span></td><td>Backfill</td><td>11</td><td>yaohua.li</td><td>2026-03-31 14:48:22</td></tr>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td><a class="link" onclick="switchView('view-event')">20260331144737230_yaohua.li_BACK_FILL</a></td><td>20260331_BACKFILL_runtime_daily</td><td><span class="status-badge success">Successful</span></td><td>Backfill</td><td>9</td><td>yaohua.li</td><td>2026-03-31 14:47:37</td></tr>
+    </tbody>
+  </table>
+  <div class="pagination"><div class="pg-left"><button class="btn-outline" style="font-size:12px;padding:3px 10px;">Kill</button> <button class="btn-outline" style="font-size:12px;padding:3px 10px;">Mark Success</button></div><div class="pg-right"><span>7 Search Results</span><button class="pg-btn disabled">&lt;</button><button class="pg-btn active">1</button><button class="pg-btn disabled">&gt;</button><span>10/page</span></div></div>
+</div>
+
+<!-- VIEW 9: Marker Search -->
+<div class="left-view" id="view-marker-search">
+  <div style="padding:16px 24px 0;font-size:16px;font-weight:600;color:#333;">Marker Search</div>
+  <div style="padding:8px 24px 12px;font-size:12px;color:#1890FF;background:#E6F7FF;margin:8px 24px;border-radius:4px;border:1px solid #91D5FF;">ℹ This list by default displays all the markers produced within the project. To search for other markers, please enter keyword below and click Search.</div>
+  <div class="filter-section">
+    <div class="filter-item"><span class="filter-label">Project</span><select class="filter-select"><option>Select Project</option></select></div>
+    <div class="filter-item"><span class="filter-label">Marker Name</span><input class="filter-input" placeholder="Enter Marker Name"/></div>
+    <div class="filter-item"><span class="filter-label">Task Code</span><input class="filter-input" placeholder="Enter Complete Task Code" style="width:180px"/></div>
+    <div style="display:flex;align-items:center;gap:4px;margin-left:4px;"><span style="font-size:12px;padding:2px 8px;background:#E6F7FF;color:#1890FF;border-radius:12px;border:1px solid #91D5FF;">5</span><span style="font-size:12px;color:#1890FF;cursor:pointer;">▾ Expand</span></div>
+    <div style="margin-left:auto;display:flex;gap:6px;"><button class="btn-reset">Reset</button><button class="btn-search">Search</button></div>
+  </div>
+  <table class="data-table">
+    <thead><tr><th style="width:36px"><input type="checkbox" style="accent-color:#1890FF"/></th><th style="min-width:300px">Marker Name</th><th>Marker Type</th><th>Task Code</th><th>IDC Region</th><th>Owner</th><th>Freque...</th><th style="width:120px">Action</th></tr></thead>
+    <tbody>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td style="font-size:12px;word-break:break-all;max-width:320px;">sys.data_daasprofile.hdfs://r2/projects/data_daasprofile/hive/dev_data_daasprofile/dwd_upp_manual_segment__th_continuous_s0_live_paimon_0225#...</td><td><span class="source-badge">OTHERS</span></td><td style="font-size:12px;">dwd_upp_manual_segment__reg_continuous_s0_live_paimon-TH-Dev</td><td>SG</td><td>paimon_table_service</td><td>OTHE...</td><td><a class="link" onclick="switchView('view-marker-view')">Details</a> <span style="color:#8C8C8C;font-size:12px;">Inactivate</span></td></tr>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td style="font-size:12px;word-break:break-all;max-width:320px;">sys.data_usermart.hdfs://r2/projects/data_usermart/hive/mp_user/realtime/rt_dws_user_login_cnt_hi__vn_20241105/hoodie/...</td><td><span class="source-badge">OTHERS</span></td><td style="font-size:12px;">rt_dws_user_login_cnt_hi__xx_k2hd-VN</td><td>SG</td><td>hudi_table_service</td><td>OTHE...</td><td><a class="link" onclick="switchView('view-marker-view')">Details</a> <span style="color:#8C8C8C;font-size:12px;">Inactivate</span></td></tr>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td style="font-size:12px;word-break:break-all;max-width:320px;">sys.data_paiddadsmart.hdfs://r2/projects/data_paiddadsmart/hive/mp_paiddads/dws_shop_item_order_ads_performance_1d__vn_s0_live#...</td><td><span class="source-badge">OTHERS</span></td><td style="font-size:12px;">2_dws_shop_item_order_ads_performance_1d-VN</td><td>SG</td><td>paimon_table_service</td><td>OTHE...</td><td><a class="link" onclick="switchView('view-marker-view')">Details</a> <span style="color:#8C8C8C;font-size:12px;">Inactivate</span></td></tr>
+      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td style="font-size:12px;word-break:break-all;max-width:320px;">sys.mp_cs.hdfs://o2/projects/mp_cs/hive/mp_cs/rt_dwd/rt_grp_dwd_email_record_reg_20250526/hoodie/...</td><td><span class="source-badge">OTHERS</span></td><td style="font-size:12px;">us_dwd_email_record__reg_k2hd</td><td>SG</td><td>hudi_table_service</td><td>OTHE...</td><td><a class="link" onclick="switchView('view-marker-view')">Details</a> <span style="color:#8C8C8C;font-size:12px;">Inactivate</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- VIEW 10: Marker View -->
+<div class="left-view" id="view-marker-view">
+  <div class="pg-breadcrumb"><a onclick="switchView('view-marker-search')">Marker Search</a> / <strong>Marker View</strong></div>
+  <div style="padding:8px 24px 0;font-size:13px;color:#595959;word-break:break-all;">sys.data_daasprofile.hdfs://r2/projects/data_daasprofile/hive/data_daasprofile/dwd_upp_realtime_tag__mx_conti... <span style="color:#8C8C8C;font-size:12px;">Business Time (UTC+8) ⓘ</span> <input class="filter-input" value="2026-03-28 00:00:00" style="width:140px;margin-left:4px;"/> → End date</div>
+  <div class="pg-meta" style="flex-wrap:wrap;gap:12px;">
+    <span class="pg-meta-item">Marker Type: <span class="source-badge">OTHERS</span></span>
+    <span class="pg-meta-item">IDC Region: <span style="color:#333">SG</span></span>
+    <span class="pg-meta-item">Frequency: <span class="source-badge" style="background:#F0F0F0;color:#333;border-color:#D9D9D9;">OTHER</span></span>
+    <span class="pg-meta-item">Status: <span class="status-badge success">Active</span></span>
+    <span class="pg-meta-item">Scope: <span style="color:#333">External</span></span>
+  </div>
+  <div class="pg-meta" style="flex-wrap:wrap;gap:12px;border-bottom:1px solid #F0F0F0;padding-bottom:12px;">
+    <span class="pg-meta-item">Task Code: <span style="color:#333">dwd_upp_realtime_tag__mx_continuous_s0_live</span></span>
+    <span class="pg-meta-item">Owner: <span style="color:#333">hudi_table_service</span></span>
+    <span class="pg-meta-item">Create Time: <span style="color:#333">2026-04-03 14:38:23</span></span>
+    <span class="pg-meta-item">System Name: <span style="color:#333">hudi_table_service</span></span>
+  </div>
+  <div style="flex:1;padding:24px;overflow-y:auto;">
+    <div style="height:180px;background:#FAFAFA;border:1px solid #F0F0F0;border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:20px;position:relative;">
+      <div style="position:absolute;left:8px;top:50%;transform:translateY(-50%);writing-mode:vertical-rl;text-orientation:mixed;font-size:11px;color:#8C8C8C;transform:rotate(180deg);writing-mode:vertical-rl;">Update Time</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <div style="font-size:11px;color:#8C8C8C;">02:38:23 PM</div>
+        <div style="width:4px;height:4px;background:#1890FF;border-radius:50%;"></div>
+        <div style="font-size:10px;color:#BFBFBF;">03/04/2026 14:38:22</div>
+      </div>
+      <div style="position:absolute;bottom:8px;right:50%;font-size:11px;color:#8C8C8C;">Business Time</div>
+    </div>
+    <table class="data-table">
+      <thead><tr><th style="width:36px">+</th><th>Offset ⓘ</th><th style="width:36px"><input type="checkbox" style="accent-color:#1890FF"/></th><th>Business Time ↕</th><th>Update Time ↕</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>+</td><td></td><td><input type="checkbox" style="accent-color:#1890FF"/></td><td>2026-04-03 14:38:22</td><td>2026-04-03 14:38:23</td><td>Create</td><td><a class="link">Consumers</a> <span style="color:#8C8C8C;cursor:pointer;">Delete</span></td></tr>
+      </tbody>
+    </table>
+    <div class="pagination"><div class="pg-left"><button class="btn-outline" style="font-size:12px;padding:3px 10px;">Delete</button></div><div class="pg-right"><span>1 Search Results</span><button class="pg-btn disabled">&lt;</button><button class="pg-btn active">1</button><button class="pg-btn disabled">&gt;</button><span>10/page</span></div></div>
+  </div>
+</div>
+
+<!-- VIEW 12: All Instances -->
+<div class="left-view" id="view-all-instances">
+  <div style="padding:12px 24px 0;display:flex;align-items:center;gap:16px;">
+    <span style="font-size:14px;font-weight:600;color:#1890FF;border-bottom:2px solid #1890FF;padding-bottom:8px;">Task Instances</span>
+    <span style="font-size:14px;color:#595959;padding-bottom:8px;cursor:pointer;">Workflow Instances</span>
+  </div>
+  <div class="filter-section" style="flex-wrap:wrap;">
+    <div class="filter-item"><span class="filter-label">Task Name</span><input class="filter-input" placeholder="Enter Task Name" id="ai-filter-name"/></div>
+    <div class="filter-item"><span class="filter-label">Instance Code</span><input class="filter-input" placeholder="Enter Instance Code"/></div>
+    <div class="filter-item"><span class="filter-label">Status</span><select class="filter-select" id="ai-filter-status" onchange="filterInstanceTable(this.value)"><option value="">Select Status</option><option value="Successful">Successful</option><option value="Failed">Failed</option><option value="Running">Running</option><option value="Waiting">Waiting</option></select></div>
+    <div class="filter-item"><span class="filter-label">Task Code</span><input class="filter-input" placeholder="Enter Task Code"/></div>
+    <div class="filter-item"><span class="filter-label">Owner</span><input class="filter-input" placeholder="Enter Owner Email"/></div>
+    <div style="margin-left:auto;display:flex;gap:6px;"><button class="btn-reset">Reset</button><button class="btn-search">Search</button></div>
+  </div>
+  <table class="data-table" id="ai-instance-table">
+    <thead><tr><th style="width:36px"><input type="checkbox" style="accent-color:#1890FF"/></th><th>Task Name</th><th>Instance Code</th><th>Status</th><th>Instance Type</th><th>Business Time (UTC+8)</th><th>Create Time (UTC+8)</th><th style="width:100px">Action</th></tr></thead>
+    <tbody id="ai-instance-tbody"></tbody>
+  </table>
+  <div class="pagination"><div class="pg-left">Batch Operate <svg width="10" height="6" fill="#8C8C8C"><path d="M0 0l5 5 5-5"/></svg></div><div class="pg-right"><span id="ai-instance-count">0 Search Results</span><button class="pg-btn disabled">&lt;</button><button class="pg-btn active">1</button><button class="pg-btn disabled">&gt;</button><span>30/page</span></div></div>
+</div>
+
+<!-- VIEW 11: Lineage -->
+<div class="left-view" id="view-lineage">
+  <div class="pg-breadcrumb"><a onclick="switchView('view-tasklist')">Scheduled Tasks</a> / <a onclick="switchView('view-taskview-matrix')">Task View</a> / <strong>Lineage</strong></div>
+  <div class="pg-title-row">
+    <div class="pg-title">update_table <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8C8C" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div>
+    <div class="pg-actions"><span style="font-size:12px;color:#8C8C8C;margin-right:8px;">Last updated: 2026-04-03 15:49:35</span><button class="btn-outline">Workflow View</button><button class="btn-outline">Operate ▾</button><button class="btn-primary-sm">Edit (In Data Studio)</button></div>
+  </div>
+  <div class="pg-meta">
+    <span class="pg-meta-item">Source <span class="source-badge">Data Studio</span></span>
+    <span class="pg-meta-item">Task Type <span class="type-badge">Spark SQL</span></span>
+    <span class="pg-meta-item">Priority <span style="color:#333">⇌ 3</span></span>
+    <span class="pg-meta-item" style="color:#8C8C8C">Task Code <span style="color:#1890FF">di_scheduler.studio_6801187 <span style="cursor:pointer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></span></span></span>
+  </div>
+  <div class="tab-bar">
+    <div class="tab-item" onclick="switchView('view-taskview-matrix')">Matrix View</div>
+    <div class="tab-item" onclick="switchView('view-taskview-list')">List View</div>
+    <div class="tab-item active">Lineage</div>
+    <div class="tab-item">Gantt Chart</div>
+    <div class="tab-item">Runtime Trend</div>
+    <div class="tab-item">Details</div>
+    <div class="tab-item">Code</div>
+    <div class="tab-item">Output Config</div>
+    <div class="tab-item">Operation Log</div>
+    <div class="tab-item">Privilege</div>
+    <div class="tab-item" onclick="switchView('view-taskview-alarm')">Alarm</div>
+    <div class="tab-item">Backfill</div>
+    <div class="tab-item">Spark</div>
+    <div class="tab-item">SLA &amp; DR</div>
+  </div>
+  <div class="dag-toolbar">
+    <button class="dag-tool-btn" title="Zoom In">🔍+</button>
+    <button class="dag-tool-btn" title="Zoom Out">🔍−</button>
+    <button class="dag-tool-btn" title="Fit">⛶</button>
+    <span style="width:1px;height:20px;background:#E8E8E8;"></span>
+    <button class="dag-tool-btn" title="Horizontal">☰</button>
+    <button class="dag-tool-btn" title="Vertical">⫐</button>
+    <span style="width:1px;height:20px;background:#E8E8E8;"></span>
+    <button class="dag-tool-btn" title="Center">◎</button>
+    <span style="margin-left:auto;font-size:12px;color:#1890FF;cursor:pointer;">↻ Reset</span>
+    <span style="font-size:12px;color:#8C8C8C;">Search</span>
+    <input class="filter-input" placeholder="Search" style="width:120px;height:26px;"/>
+  </div>
+  <div class="dag-container">
+    <div class="dag-canvas" id="task-lineage-canvas"></div>
+  </div>
+  <div class="dag-bottom">
+    <button class="dag-action-btn">Freeze(0)</button>
+    <button class="dag-action-btn">Unfreeze(0)</button>
+    <button class="dag-action-btn">Backfill(0)</button>
+    <button class="dag-action-btn">Trigger Now(0)</button>
+  </div>
+</div>
+
+<!-- VIEW 12: Instance Lineage -->
+<div class="left-view" id="view-instance-lineage">
+  <div class="pg-breadcrumb"><a onclick="switchView('view-tasklist')">Scheduled Tasks</a> / <a onclick="switchView('view-taskview-matrix')">Task View</a> / <a onclick="switchView('view-detail')">Instance View</a> / <strong>Instance Lineage</strong></div>
+  <div class="pg-title-row">
+    <div class="pg-title"><span class="status-badge failed">Failed</span> update_table <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8C8C" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div>
+    <div class="pg-actions"><button class="btn-outline">Operate ▾</button></div>
+  </div>
+  <div class="pg-meta">
+    <span class="pg-meta-item">Source <span class="source-badge">Data Studio</span></span>
+    <span class="pg-meta-item">Task Type <span class="type-badge">Spark SQL</span></span>
+    <span class="pg-meta-item">Priority <span style="color:#333">⇌ 3</span></span>
+    <span class="pg-meta-item" style="color:#8C8C8C">Instance Code <span style="color:#1890FF">di_scheduler.studio_6801187_20260403_DAY_2</span></span>
+  </div>
+  <div class="tab-bar">
+    <div class="tab-item" onclick="switchView('view-detail')">Details</div>
+    <div class="tab-item" onclick="switchView('view-code')">Code</div>
+    <div class="tab-item">Output</div>
+    <div class="tab-item" onclick="switchView('view-syslog')">System Log</div>
+    <div class="tab-item">Operation Log</div>
+    <div class="tab-item active">Lineage</div>
+    <div class="tab-item">Gantt Chart</div>
+    <div class="tab-item">Cascade Rerun</div>
+  </div>
+  <div class="dag-toolbar">
+    <button class="dag-tool-btn" title="Zoom In">🔍+</button>
+    <button class="dag-tool-btn" title="Zoom Out">🔍−</button>
+    <button class="dag-tool-btn" title="Fit">⛶</button>
+    <span style="width:1px;height:20px;background:#E8E8E8;"></span>
+    <button class="dag-tool-btn" title="Horizontal">☰</button>
+    <button class="dag-tool-btn" title="Vertical">⫐</button>
+    <span style="width:1px;height:20px;background:#E8E8E8;"></span>
+    <button class="dag-tool-btn" title="Center">◎</button>
+    <span style="margin-left:auto;font-size:12px;color:#1890FF;cursor:pointer;">↻ Reset</span>
+    <span style="font-size:12px;color:#8C8C8C;">Search</span>
+    <input class="filter-input" placeholder="Search" style="width:120px;height:26px;"/>
+  </div>
+  <div class="dag-container">
+    <div class="dag-canvas" id="instance-lineage-canvas"></div>
+  </div>
+</div>
+
+<!-- VIEW: Alarm Policy List -->
+<div class="left-view" id="view-alarm-policy">
+  <div class="alarm-header">
+    <h2>Alarm Policy</h2>
+    <button class="btn-new-policy" onclick="openNewPolicyModal()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>
+      New Policy
+    </button>
+  </div>
+  <div class="alarm-tabs">
+    <div class="atab active">Task</div>
+    <div class="atab">Workflow</div>
+    <div class="atab">SLA Manager</div>
+  </div>
+  <div class="alarm-filter-bar">
+    <div class="af-group"><span class="af-label">Alarm Policy</span><input class="af-input" placeholder="Enter Alarm Name" style="width:180px;"/></div>
+    <div class="af-group"><span class="af-label">Alarm Trigger</span><select class="af-select"><option value="">Select Alarm Trigger</option><option>Task Failure</option><option>Task Attempt Failure</option><option>Input Overtime</option><option>Output Overtime</option><option>Running Duration Overtime</option><option>Task Success</option><option>Upstream Frequency Change</option><option>Cascade Rerun</option><option>Upstream Task Failure</option><option>Runtime Anomaly Alert</option></select></div>
+    <div class="af-group"><span class="af-label">Alarm Channel</span><select class="af-select"><option value="">Select Alarm Channel</option><option>Email</option><option>SeaTalk</option><option>Webhook</option></select></div>
+    <button class="af-btn" style="margin-left:4px;">Reset</button>
+    <button class="af-btn primary">Search</button>
+  </div>
+  <div style="padding:0 24px 4px;display:flex;align-items:center;gap:8px;">
+    <label style="font-size:12px;color:#595959;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" style="accent-color:#1890FF;"/> Default Only</label>
+    <span style="color:#BFBFBF;cursor:help;font-size:13px;">&#9432;</span>
+    <div style="flex:1;"></div>
+    <span style="cursor:pointer;color:#8C8C8C;" title="Settings">⚙</span>
+    <span style="cursor:pointer;color:#8C8C8C;" title="Refresh">⟳</span>
+  </div>
+  <div style="padding:0 24px;overflow-x:auto;">
+    <table class="alarm-table" id="alarm-policy-table">
+      <thead>
+        <tr>
+          <th>Alarm Policy</th>
+          <th style="width:60px;">Enabled</th>
+          <th>Trigger</th>
+          <th>Channel</th>
+          <th>Recipient</th>
+          <th>Last Modified</th>
+          <th style="width:200px;">Action</th>
+        </tr>
+      </thead>
+      <tbody id="alarm-policy-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- VIEW: Task View - Alarm Tab -->
+<div class="left-view" id="view-taskview-alarm">
+  <div class="pg-breadcrumb"><a onclick="switchView('view-tasklist')">Scheduled Tasks</a> / <strong>Task View</strong></div>
+  <div class="pg-title-row">
+    <div class="pg-title">update_table <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8C8C" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div>
+    <div class="pg-actions"><button class="btn-outline">Workflow View</button><button class="btn-outline">Operate ▾</button><button class="btn-primary-sm">Edit (In Data Studio)</button></div>
+  </div>
+  <div class="pg-meta">
+    <span class="pg-meta-item">Source <span class="source-badge">Data Studio</span></span>
+    <span class="pg-meta-item">Task Type <span class="type-badge">Spark SQL</span></span>
+    <span class="pg-meta-item">Priority <span style="color:#333">⇌ 3</span></span>
+    <span class="pg-meta-item" style="color:#8C8C8C">Task Code <span style="color:#1890FF">di_scheduler.studio_6801187 <span style="cursor:pointer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></span></span></span>
+  </div>
+  <div class="tab-bar">
+    <div class="tab-item" onclick="switchView('view-taskview-matrix')">Matrix View</div>
+    <div class="tab-item" onclick="switchView('view-taskview-list')">List View</div>
+    <div class="tab-item" onclick="switchView('view-lineage')">Lineage</div>
+    <div class="tab-item">Gantt Chart</div>
+    <div class="tab-item">Runtime Trend</div>
+    <div class="tab-item">Details</div>
+    <div class="tab-item">Code</div>
+    <div class="tab-item">Output Config</div>
+    <div class="tab-item">Operation Log</div>
+    <div class="tab-item">Privilege</div>
+    <div class="tab-item active">Alarm</div>
+    <div class="tab-item">Backfill</div>
+    <div class="tab-item">Spark</div>
+    <div class="tab-item">SLA & DR</div>
+  </div>
+  <div class="alarm-setting-wrap">
+    <div class="alarm-sub-tabs">
+      <div class="ast active">Setting</div>
+      <div class="ast">Alarm Log</div>
+      <div class="ast">Operation Log</div>
+    </div>
+    <div class="alarm-setting-title">Alarm Setting</div>
+    <div class="alarm-type-list" id="alarm-type-list"></div>
+  </div>
+</div>
+
+<!-- LINKED TASK MODAL -->
+<div class="modal-overlay hidden" id="linkedTaskModal" onclick="if(event.target===this)closeLinkedTaskModal()">
+  <div class="modal-box" style="max-width:700px;">
+    <div class="modal-head" style="padding:16px 20px;">
+      <span style="font-size:15px;font-weight:600;color:#333;">Details</span>
+      <span style="cursor:pointer;font-size:18px;color:#8C8C8C;line-height:1;" onclick="closeLinkedTaskModal()">&times;</span>
+    </div>
+    <div style="padding:0 20px;">
+      <div style="display:flex;gap:0;border-bottom:1px solid #F0F0F0;margin-bottom:12px;">
+        <span class="lt-tab active" id="lt-tab-linked" onclick="switchLinkedTab('linked')">Linked Task</span>
+        <span class="lt-tab" id="lt-tab-log" onclick="switchLinkedTab('log')">Operation Log</span>
+      </div>
+    </div>
+    <div id="lt-tab-content-linked" style="padding:0 20px 16px;">
+      <table class="alarm-table" id="linked-task-table" style="font-size:12px;">
+        <thead><tr>
+          <th>Task Code <span style="color:#BFBFBF;cursor:pointer;font-size:10px;">⇕</span></th>
+          <th>Task Name <span style="color:#BFBFBF;cursor:pointer;font-size:10px;">⇕</span></th>
+          <th>Owner <span style="color:#BFBFBF;cursor:pointer;font-size:10px;">⇕</span></th>
+        </tr></thead>
+        <tbody id="linked-task-tbody"></tbody>
+      </table>
+      <div id="linked-task-footer" style="display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:10px 0;font-size:12px;color:#8C8C8C;"></div>
+    </div>
+    <div id="lt-tab-content-log" style="padding:0 20px 16px;display:none;">
+      <div style="color:#8C8C8C;font-size:12px;text-align:center;padding:30px 0;">No operation logs</div>
+    </div>
+  </div>
+</div>
+
+<!-- NEW ALARM SETTING MODAL -->
+<div class="modal-overlay hidden" id="newAlarmModal" onclick="if(event.target===this)closeNewPolicyModal()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>New Alarm Setting</h3>
+      <button class="modal-close" onclick="closeNewPolicyModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-row">
+        <div class="mr-label"><span class="req">*</span> Alarm Policy Name :</div>
+        <div class="mr-field"><input class="mr-input" placeholder="Enter alarm policy name" id="modal-policy-name"/></div>
+      </div>
+      <div class="modal-row">
+        <div class="mr-label"><span class="req">*</span> Trigger Condition :</div>
+        <div class="mr-field">
+          <select class="mr-select" id="modal-trigger">
+            <option value="Task Failure">Task Failure</option>
+            <option value="Task Attempt Failure">Task Attempt Failure</option>
+            <option value="Input Overtime">Input Overtime</option>
+            <option value="Output Overtime">Output Overtime</option>
+            <option value="Running Duration Overtime">Running Duration Overtime</option>
+            <option value="Task Success">Task Success</option>
+            <option value="Upstream Frequency Change">Upstream Frequency Change</option>
+            <option value="Cascade Rerun">Cascade Rerun</option>
+            <option value="Upstream Task Failure">Upstream Task Failure</option>
+            <option value="Runtime Anomaly Alert">Runtime Anomaly Alert</option>
+          </select>
+          <div class="mr-hint" id="modal-trigger-hint">Trigger when the task instance status becomes 'Failed'</div>
+        </div>
+      </div>
+      <div class="modal-row">
+        <div class="mr-label"><span class="req">*</span> Alarm Channel :</div>
+        <div class="mr-field">
+          <select class="mr-select" id="modal-channel">
+            <option value="Email">Email</option>
+            <option value="SeaTalk">SeaTalk</option>
+            <option value="Webhook">Webhook</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-row">
+        <div class="mr-label">Select Recipient :</div>
+        <div class="mr-field">
+          <div class="mr-checkbox-grid">
+            <label><input type="checkbox" checked/> Task Owner</label>
+            <label><input type="checkbox" checked/> Task Editor</label>
+            <label><input type="checkbox" checked/> Workflow Owner</label>
+            <label><input type="checkbox" checked/> Workflow Editor</label>
+            <label><input type="checkbox"/> Project Admin</label>
+            <label><input type="checkbox"/> Project Ops</label>
+            <label><input type="checkbox"/> Project Maintainer</label>
+            <label><input type="checkbox"/> DevOnDuty (Via DoD) &#9432;</label>
+            <label><input type="checkbox"/> Others &#9432;</label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-row">
+        <div class="mr-label">Alarm Message :</div>
+        <div class="mr-field">
+          <div class="mr-radio-group">
+            <label><input type="radio" name="msg-type" value="default" checked/> Use Default</label>
+            <label><input type="radio" name="msg-type" value="custom"/> Customize</label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-row">
+        <div class="mr-label">Message Body :</div>
+        <div class="mr-field">
+          <div class="msg-body-preview">
+            Your task instance <span class="var-tag">task_instance_code</span> in <span class="var-tag">data_environment</span> environment has failed.<br/>
+            Task Name: <span class="var-tag">task_name</span><br/>
+            Task Status: <span class="var-tag">task_instance_status</span> <span class="var-tag">task_instance_detail_status</span><br/>
+            Workflow Name: <span class="var-tag">workflow_name</span><br/>
+            Task Priority: <span class="var-tag">task_priority</span><br/>
+            Failed Auto-retries: <span class="var-tag">number_of_retry</span><br/>
+            Failed At: <span class="var-tag">task_failure_time</span><br/>
+            IDC Region: <span class="var-tag">IDC_REGION</span><br/>
+            Diagnostic: <span class="var-tag">error_diagnostic</span>
+          </div>
+        </div>
+      </div>
+      <div style="padding:0 0 8px 160px;">
+        <span style="color:#1890FF;cursor:pointer;font-size:12px;">+ Add more alarm channel</span>
+      </div>
+      <div class="modal-row">
+        <div class="mr-label"><span class="req">*</span> Set Default &#9432; :</div>
+        <div class="mr-field">
+          <div class="mr-radio-group">
+            <label><input type="radio" name="set-default" value="yes"/> Yes</label>
+            <label><input type="radio" name="set-default" value="no" checked/> No</label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-row">
+        <div class="mr-label">Alarm Snooze &#9432; :</div>
+        <div class="mr-field">
+          <label class="toggle-sw"><input type="checkbox"/><span class="slider"></span></label>
+          <span style="font-size:12px;color:#8C8C8C;margin-left:6px;">OFF</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="mf-btn cancel" onclick="closeNewPolicyModal()">Cancel</button>
+      <button class="mf-btn save" onclick="saveNewPolicy()">Save</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /left-content -->
+
+<!-- RIGHT AGENT PANEL -->
+<div class="agent-panel" id="agentPanel" style="position:relative;">
+  <div class="resize-handle" id="resizeHandle"></div>
+
+  <div class="ap-mini" onclick="toggleMinimize()">
+    <div class="ap-mini-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5z"/><path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" opacity=".8"/><path d="M6 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" opacity=".5"/></svg></div>
+    <span class="ap-mini-label">AI Agent</span>
+  </div>
+
+  <div class="ap-header" id="apHeaderDrag">
+    <div class="ap-header-full">
+      <div class="ap-h-left">
+        <div class="ap-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5z"/><path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" opacity=".8"/><path d="M6 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" opacity=".5"/></svg></div>
+        <div><div class="ap-title">Intelligent Ops Agent</div><div class="ap-subtitle">Scheduler AI Ops Agent</div></div>
+      </div>
+      <div class="ap-h-actions">
+        <button type="button" class="dock-btn" id="dockBtn" title="Float / Dock" onclick="toggleFloat()">⇄ Float</button>
+        <button type="button" class="ap-btn" id="fsBtn" title="Fullscreen / Sidebar" onclick="toggleFullscreen()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg></button>
+        <button type="button" class="ap-btn" title="Minimize" onclick="toggleMinimize()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg></button>
+      </div>
+    </div>
+    <div class="session-tab-bar" id="sessionTabBar">
+      <div class="stb-tabs" id="sessionTabs"></div>
+      <div class="stb-actions">
+        <button type="button" class="stb-btn stb-more-btn" id="stbMoreBtn" title="More tabs" style="display:none" onclick="toggleMoreTabs()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
+        <button type="button" class="stb-btn" title="New Chat" onclick="createNewSession()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg></button>
+        <button type="button" class="stb-btn" title="Chat History" onclick="toggleSessionList()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></button>
+      </div>
+    </div>
+  </div>
+  <div class="stb-more-dropdown" id="stbMoreDropdown"></div>
+
+  <div class="history-dropdown" id="historyDropdown" style="display:none">
+    <div class="hd-search"><svg class="hd-search-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input class="hd-search-input" type="text" placeholder="Search chats..." oninput="filterSessions(this.value)"/></div>
+    <div class="hd-body" id="sessionListBody"></div>
+    <div class="hd-footer"><button class="sl-clear-btn" type="button" onclick="clearAllSessions()">Clear All</button></div>
+  </div>
+  <div class="hd-backdrop" id="hdBackdrop" onclick="closeSessionList()"></div>
+
+  <div class="conv-container active" id="conv-welcome"></div>
+
+  <div class="conv-container" id="conv-failure">
+    <div class="msg user"><div class="msg-av human">U</div><div class="msg-body"><div class="msg-bubble">Diagnose why instance di_scheduler.studio_6801187_20260403_DAY_2 failed</div><div class="msg-actions user-actions"><button class="msg-act" title="Copy" onclick="copyUserMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div></div></div>
+    <div class="msg agent">
+      <div class="msg-av agent"><svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5z"/><path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" opacity=".8"/><path d="M6 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" opacity=".5"/></svg></div>
+      <div class="msg-body">
+        <div class="response-wrap">
+          <div class="msg-bubble" style="border:none;background:transparent;padding:8px 14px 6px;">Analyzed instance <strong>di_scheduler.studio_6801187_20260403_DAY_2</strong> (task update_table); this instance has failed.</div>
+          <div class="r-card">
+            <div class="r-card-h"><div class="r-card-ico" style="background:#FFF1F0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF4D4F" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg></div><span class="r-card-t">Root Cause</span></div>
+            <div class="r-card-b">
+              <div class="rc-section"><div class="rc-label">Error Type</div><span class="rc-error-type">OutOfMemoryError (OOM)</span></div>
+              <div class="rc-section"><div class="rc-label">Direct Cause</div><div class="rc-value">Executor memory cap <strong>8GB</strong> was exceeded (peak <strong>8.1GB</strong>); YARN killed the container; <strong>COLLECT_LIST</strong> caused data skew on a hot key.</div></div>
+            </div>
+          </div>
+          <div class="r-card" style="margin-top:0;border-top:1px solid #F0F0F0;">
+            <div class="r-card-h"><div class="r-card-ico" style="background:#E6F7FF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg></div><span class="r-card-t">Fix Suggestions</span></div>
+            <div class="r-card-b">
+              <div class="rc-suggestions">
+                <div class="rc-sug-item"><span><code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">spark.executor.memory</code> current <strong>8g</strong> → suggest <strong>12g</strong></span><button type="button" class="apply-btn" onclick="applyFix(this,'spark.executor.memory','12g')">Apply</button></div>
+                <div class="rc-sug-item"><span><code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">spark.sql.shuffle.partitions</code> current <strong>200</strong> → suggest <strong>320</strong> to reduce data per partition</span><button type="button" class="apply-btn" onclick="applyFix(this,'spark.sql.shuffle.partitions','320')">Apply</button></div>
+                <div class="rc-sug-item"><span>Hot key: <strong>user_id=928173</strong> (~2.3GB); consider salting COLLECT_LIST / two-phase aggregation</span><button type="button" class="apply-btn" onclick="linkTo('view-code',null,{taskName:'update_table',instanceId:'di_scheduler.studio_6801187_20260403_DAY_2'})" style="background:#E6F7FF;border-color:#91D5FF;color:#1890FF;">View Code</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="resp-section" style="background:#fff;">
+            <div class="rc-label" style="margin-bottom:6px;">Optimized SQL Example (salting)</div>
+            <div class="code-block">
+              <div class="cb-header"><span>Spark SQL</span><div class="cb-actions"><button type="button" class="cb-act" onclick="copyCode(this)">Copy</button><button type="button" class="cb-act" onclick="insertCode(this)">Insert to Editor</button></div></div>
+              <pre class="cb-code" id="cb-sql-oom"><span class="cm">-- salting to mitigate COLLECT_LIST skew</span>
+<span class="kw">WITH</span> salted <span class="kw">AS</span> (
+  <span class="kw">SELECT</span> <span class="fn">concat</span>(<span class="kw">cast</span>(user_id <span class="kw">AS STRING</span>), <span class="str">'_'</span>, <span class="fn">cast</span>(<span class="fn">floor</span>(<span class="fn">rand</span>() * <span class="num">8</span>) <span class="kw">AS STRING</span>)) <span class="kw">AS</span> user_salt,
+         order_id, amt, ...
+  <span class="kw">FROM</span> ods_raw_order_data
+  <span class="kw">WHERE</span> dt = <span class="str">'2026-04-03'</span>
+)
+<span class="kw">SELECT</span> user_id, <span class="fn">collect_list</span>(<span class="fn">struct</span>(order_id, amt)) ...
+<span class="kw">FROM</span> salted
+<span class="kw">GROUP BY</span> user_salt;</pre>
+            </div>
+          </div>
+          <div class="resp-section" style="border-bottom:none;">
+            <div class="link-btns">
+              <button type="button" class="link-btn" onclick="triggerDynRerun('preset-rerun','update_table','di_scheduler.studio_6801187_20260403_DAY_2')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>Rerun This Instance</button>
+              <button type="button" class="link-btn" onclick="linkTo('view-syslog',null,{taskName:'update_table',instanceId:'di_scheduler.studio_6801187_20260403_DAY_2'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>View System Log</button>
+              <button type="button" class="link-btn" onclick="linkTo('view-code',null,{taskName:'update_table',instanceId:'di_scheduler.studio_6801187_20260403_DAY_2'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>View Code</button>
+              <button type="button" class="link-btn" onclick="linkTo('view-detail',null,{taskName:'update_table',instanceId:'di_scheduler.studio_6801187_20260403_DAY_2'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>View Instance Details</button>
+            </div>
+          </div>
+        </div>
+        <div class="msg-actions"><button type="button" class="msg-act" title="Like" onclick="likeMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg></button><button type="button" class="msg-act" title="Dislike" onclick="dislikeMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z"/><path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg></button><button type="button" class="msg-act" title="Copy" onclick="copyMsgContent(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>
+      </div>
+    </div>
+  
+  </div>
+
+  <div class="conv-container" id="conv-info">
+    <div class="msg user"><div class="msg-av human">U</div><div class="msg-body"><div class="msg-bubble">What are the upstream and downstream dependencies for task update_table</div><div class="msg-actions user-actions"><button class="msg-act" title="Copy" onclick="copyUserMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div></div></div>
+    <div class="msg agent">
+      <div class="msg-av agent"><svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5z"/><path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" opacity=".8"/><path d="M6 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" opacity=".5"/></svg></div>
+      <div class="msg-body">
+        <div class="response-wrap">
+          <div class="msg-bubble" style="border:none;background:transparent;padding:0 0 8px;">Task <strong>update_table</strong> (<code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">di_scheduler.studio_6801187</code>): <strong>Task-level</strong> dependencies are as follows:</div>
+          <div class="r-card">
+            <div class="r-card-b" style="padding:14px;">
+              <div class="dep-group">
+                <div class="dep-group-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FA8C16" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Upstream Dependencies (3 tasks)</div>
+                <div class="dep-item"><span class="dep-name" onclick="navToTask('ods_raw_order_data')">ods_raw_order_data</span><span class="dep-meta">Daily · studio_4501234</span></div>
+                <div class="dep-item"><span class="dep-name" onclick="navToTask('dim_user_info')">dim_user_info</span><span class="dep-meta">Daily · studio_2106534</span></div>
+                <div class="dep-item"><span class="dep-name" onclick="navToTask('ods_product_catalog')">ods_product_catalog</span><span class="dep-meta">Daily · studio_1908742</span></div>
+              </div>
+              <div class="dep-group" style="margin-bottom:0;">
+                <div class="dep-group-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Downstream Dependencies (2 tasks)</div>
+                <div class="dep-item"><span class="dep-name" onclick="navToTask('dws_order_summary_daily')">dws_order_summary_daily</span><span class="dep-meta">Daily · studio_5512380</span></div>
+                <div class="dep-item"><span class="dep-name" onclick="navToTask('ads_order_report')">ads_order_report</span><span class="dep-meta">Daily · studio_6678901</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="resp-section" style="border-bottom:none;"><div class="link-btns"><button type="button" class="link-btn" onclick="linkTo('view-lineage',null,{taskName:'update_table'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>View Task Lineage</button></div></div>
+        </div>
+        <div class="msg-actions"><button type="button" class="msg-act" onclick="likeMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg></button><button type="button" class="msg-act" onclick="dislikeMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z"/><path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg></button><button type="button" class="msg-act" onclick="copyMsgContent(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>
+      </div>
+    </div>
+    <div class="msg user"><div class="msg-av human">U</div><div class="msg-body"><div class="msg-bubble">What does its code do</div></div></div>
+    <div class="msg agent">
+      <div class="msg-av agent"><svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5z"/><path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" opacity=".8"/><path d="M6 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" opacity=".5"/></svg></div>
+      <div class="msg-body">
+        <div class="response-wrap">
+          <div class="msg-bubble" style="border:none;background:transparent;padding:0;">This task runs <strong>Spark SQL</strong>. Core logic:<br><br>1. Read the day’s orders from <code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">ods.raw_order_data</code><br>2. JOIN <code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">ods.product_catalog</code><br>3. JOIN <code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">dim.user_info</code><br>4. <strong>COLLECT_LIST</strong> aggregates order lines per user<br>5. Write to the <code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">dwd.order_detail</code> partition<br><br>The bottleneck is mainly the Shuffle caused by <strong>COLLECT_LIST</strong> and wide-table JOINs.</div>
+          <div class="resp-section" style="border-bottom:none;"><div class="link-btns"><button type="button" class="link-btn" onclick="linkTo('view-code',null,{taskName:'update_table'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>View Full Code</button></div></div>
+        </div>
+        <div class="msg-actions"><button type="button" class="msg-act" onclick="likeMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg></button><button type="button" class="msg-act" onclick="dislikeMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z"/><path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg></button><button type="button" class="msg-act" onclick="copyMsgContent(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>
+      </div>
+    </div>
+    <div class="msg user"><div class="msg-av human">U</div><div class="msg-body"><div class="msg-bubble">Please delete this task for me</div></div></div>
+    <div class="msg agent">
+      <div class="msg-av agent"><svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5z"/><path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" opacity=".8"/><path d="M6 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" opacity=".5"/></svg></div>
+      <div class="msg-body">
+        <div class="response-wrap">
+          <div class="msg-bubble" style="border:none;background:transparent;padding:0;">
+            <div style="display:flex;align-items:flex-start;gap:8px;padding:10px 14px;background:linear-gradient(135deg,#FFFBE6 0%,#FFF7E6 100%);border:1px solid #FFE58F;border-radius:8px;margin-bottom:10px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D46B08" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><div style="font-size:12px;color:#D46B08;line-height:1.6;"><strong>Deleting a task</strong> is not supported via the AI assistant. Go to the <a class="link" onclick="switchView('view-taskview-matrix')">Task Details page</a> to perform manually.</div></div>
+            <div class="r-card" style="margin-top:0;"><div class="r-card-b" style="padding:12px 14px;"><div style="font-size:12px;color:#595959;margin-bottom:8px;font-weight:600;">Supported Operations</div><div style="font-size:11px;color:#8C8C8C;margin-bottom:4px;">Instance Level</div><div class="ops-list"><span class="ops-tag allowed">Rerun</span><span class="ops-tag allowed">Kill</span><span class="ops-tag allowed">Skip Dependency</span><span class="ops-tag allowed">Mark Success</span><span class="ops-tag allowed">Retry DQC</span></div><div style="font-size:11px;color:#8C8C8C;margin-bottom:4px;margin-top:10px;">Task Level</div><div class="ops-list"><span class="ops-tag allowed">Backfill</span><span class="ops-tag allowed">Freeze/Unfreeze</span><span class="ops-tag allowed">Adjust Priority</span><span class="ops-tag allowed">Alarm</span></div></div></div>
+          </div>
+        </div>
+        <div class="msg-actions"><button type="button" class="msg-act" onclick="likeMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg></button><button type="button" class="msg-act" onclick="dislikeMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z"/><path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg></button><button type="button" class="msg-act" onclick="copyMsgContent(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="conv-container" id="conv-backfill">
+    <div class="msg user"><div class="msg-av human">U</div><div class="msg-body"><div class="msg-bubble">Backfill task update_table for the past week</div><div class="msg-actions user-actions"><button class="msg-act" title="Copy" onclick="copyUserMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div></div></div>
+    <div class="msg agent">
+      <div class="msg-av agent"><svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5z"/><path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" opacity=".8"/><path d="M6 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" opacity=".5"/></svg></div>
+      <div class="msg-body">
+        <div class="msg-bubble">Please confirm backfill parameters (editable):</div>
+        <div class="r-card" id="backfill-card">
+          <div class="r-card-h"><div class="r-card-ico" style="background:#F9F0FF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></div><span class="r-card-t">Operation Confirmation: Backfill <span style="font-size:10px;background:#E6F7FF;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div>
+          <div class="ac-body">
+            <div class="ac-params" id="backfill-params">
+              <div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Backfill</span></div>
+              <div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">update_table</span></div>
+              <div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">di_scheduler.studio_6801187</span></div>
+              <div class="ac-row"><span class="ac-key">Date Range</span><span class="ac-val-edit"><div class="ac-date-range"><input class="ac-input" type="date" value="2026-03-27" id="preset-bf-start" onchange="updateBackfillDays('preset-bf')"/><span style="color:#8C8C8C;">~</span><input class="ac-input" type="date" value="2026-04-03" id="preset-bf-end" onchange="updateBackfillDays('preset-bf')"/><span class="ac-hint" id="preset-bf-days">7 days total</span></div></span></div>
+              <div class="ac-row"><span class="ac-key">Concurrency</span><span class="ac-val-edit"><div class="stepper-wrap"><button type="button" class="stepper-btn" onclick="stepConcurrency(this,-1)">-</button><input class="ac-input stepper-input" type="number" value="1" min="1" max="100" onchange="validateConcurrency(this)" onblur="validateConcurrency(this)"/><button type="button" class="stepper-btn" onclick="stepConcurrency(this,1)">+</button></div><span class="ac-hint">Range 1~100</span></span></div>
+              <div class="ac-row"><span class="ac-key">Include Downstream</span><span class="ac-val-edit"><select class="ac-select"><option value="no" selected>No</option><option value="yes">Yes (cascade to downstream tasks)</option></select></span></div>
+            </div>
+            <div class="ac-warning" id="backfill-warning"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span id="preset-bf-warn-text">Will create 7 instances for backfill. Execution starts immediately after confirmation.</span></div>
+            <div class="ac-btns" id="backfill-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation('backfill')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmBackfill()">Confirm</button></div>
+          </div>
+        </div>
+        <div class="msg-actions"><button type="button" class="msg-act" onclick="likeMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg></button><button type="button" class="msg-act" onclick="dislikeMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z"/><path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg></button><button type="button" class="msg-act" onclick="copyMsgContent(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="conv-container" id="conv-large-dep">
+    <div class="msg user"><div class="msg-av human">U</div><div class="msg-body"><div class="msg-bubble">Show dependencies for task etl_data_warehouse</div><div class="msg-actions user-actions"><button class="msg-act" title="Copy" onclick="copyUserMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div></div></div>
+    <div class="msg agent" id="msg-large-dep-resp">
+      <div class="msg-av agent"><svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5z"/><path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" opacity=".8"/><path d="M6 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" opacity=".5"/></svg></div>
+      <div class="msg-body" id="msg-large-dep-content">
+        <div class="msg-actions"><button type="button" class="msg-act" onclick="likeMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg></button><button type="button" class="msg-act" onclick="dislikeMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z"/><path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg></button><button type="button" class="msg-act" onclick="copyMsgContent(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="shortcut-bar">
+      <button type="button" class="sc-chip" onclick="smartAction('patrol')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Inspect</button>
+      <button type="button" class="sc-chip" onclick="smartAction('diagnose')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg> Diagnose</button>
+      <button type="button" class="sc-chip" onclick="smartAction('syslog')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg> Logs</button>
+      <button type="button" class="sc-chip" onclick="smartAction('rerun')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg> Rerun</button>
+      <button type="button" class="sc-chip" onclick="smartAction('dependency')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg> Dependency</button>
+    </div>
+    <div class="input-row">
+      <input class="chat-input" id="chatInput" placeholder="Ask a question or enter an ops command..." onkeydown="handleInputKeydown(event)"/>
+      <button type="button" class="send-btn" onclick="simulateSend()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+    </div>
+    <div class="input-hint">Enter to send · ↑↓ for history · Natural language supported</div>
+  </div>
+</div><!-- /agent-panel -->
+
+</div><!-- /layout -->
+
+<script src="ops-agent.js?v=20260403k"></script>
+</body>
+</html>
