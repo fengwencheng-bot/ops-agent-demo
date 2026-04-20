@@ -605,6 +605,14 @@ function filterInstanceTable(statusValue) {
   if (countEl) countEl.textContent = visible + ' Search Results';
 }
 
+function navToRerunEvent(taskName, eventName) {
+  switchView('view-event');
+  var titleEl = document.querySelector('#view-event .pg-title');
+  if (titleEl) {
+    titleEl.innerHTML = '<span class="status-badge running">Running</span> ' + (eventName || taskName);
+  }
+}
+
 function navToTask(taskName) {
   const t = TASKS[taskName];
   if (!t) { switchView('view-taskview-matrix'); return; }
@@ -1157,27 +1165,6 @@ function confirmRerun() {
   if (warning) warning.style.display = 'none';
   if (btns) btns.innerHTML = '<div class="ac-done confirmed"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">Rerun submitted successfully</div><div class="acd-sub">New instance ID DAY_3 · Applied executor memory=12g</div></div><a class="acd-link" onclick="linkTo(\'view-detail\')">View Details →</a></div>';
   showToast('Rerun submitted successfully!');
-  scrollActiveConv();
-}
-
-function confirmBackfill() {
-  const btns = document.getElementById('backfill-btns');
-  if (btns && btns.classList.contains('disabled')) return;
-  if (btns) btns.classList.add('disabled');
-  const params = document.getElementById('backfill-params');
-  const warning = document.getElementById('backfill-warning');
-  if (params) params.classList.add('dimmed');
-  if (warning) warning.style.display = 'none';
-  var startEl = document.getElementById('preset-bf-start');
-  var endEl = document.getElementById('preset-bf-end');
-  var days = 7;
-  if (startEl && endEl && startEl.value && endEl.value) {
-    days = Math.round((new Date(endEl.value) - new Date(startEl.value)) / 86400000) + 1;
-    if (days < 1) days = 1;
-  }
-  var estMin = days * 3 + 4;
-  if (btns) btns.innerHTML = '<div class="ac-done confirmed"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">Backfill submitted successfully</div><div class="acd-sub">' + days + ' instance(s) executing · estimated ' + estMin + ' minutes</div></div><a class="acd-link" onclick="linkTo(\'view-event\')">View Execution Details →</a></div>';
-  showToast('Backfill submitted successfully!');
   scrollActiveConv();
 }
 
@@ -1943,6 +1930,8 @@ function classifyIntent(text) {
   if (/查.*优先级|优先级.*是多少|优先级.*查|优先级.*什么|what('s| is).*priority|priority.*(is|what|of)/i.test(text)) return { type: 'info_priority' };
   if (/终止|kill|stop|terminate/i.test(text)) return { type: 'op_kill', level: 'instance' };
   if (/重试.*DQC|DQC.*重试|retry.*dqc|dqc.*retry/i.test(text)) return { type: 'op_dqc', level: 'instance' };
+  if (/标记.*成功|置.*成功|mark.*success|set.*success/i.test(text)) return { type: 'op_mark_success', level: 'instance' };
+  if (/立即触发|trigger.*now|immediate.*run|立即执行|马上跑/i.test(text)) return { type: 'op_trigger_now', level: 'task' };
   if (/告警|alarm/i.test(text)) return { type: 'op_alarm', level: 'task' };
   if (/删除|修改代码|变更权限|修改工作流|修改.*负责人|变更.*负责人|修改.*owner|更换.*负责人|转让|移交|修改.*调度|修改.*配置|新建.*任务|创建.*任务|上线|下线|delete|modify code|change permission|modify workflow|change owner|transfer|modify schedule|modify config|create task|publish|unpublish/i.test(text)) return { type: 'unsupported' };
   if (/血缘|lineage/i.test(text)) return { type: 'info_lineage' };
@@ -2325,35 +2314,109 @@ function genOperationConfirm(intent, ctx) {
     var taskInstances = Object.entries(INSTANCES).filter(function(e) { return e[1].task === name; });
     var instRow = '';
     if (inst) {
-      instRow = '<div class="ac-row"><span class="ac-key">Instance ID</span><span class="ac-val" style="font-size:11px;">' + inst + '</span></div>';
+      instRow = '<div class="ac-row"><span class="ac-key">Instance Code</span><span class="ac-val" style="font-size:11px;">' + inst + '</span></div>';
     } else if (taskInstances.length > 0) {
       var opts = taskInstances.map(function(e) {
         return '<option value="' + e[0] + '">' + e[0] + ' (' + e[1].status + ')</option>';
       }).join('');
-      instRow = '<div class="ac-row"><span class="ac-key">Select instance</span><span class="ac-val-edit"><select class="ac-select" style="font-size:11px;min-width:180px;">' + opts + '</select></span></div>';
+      instRow = '<div class="ac-row"><span class="ac-key">Instance Code</span><span class="ac-val-edit"><select class="ac-select" style="font-size:11px;min-width:180px;">' + opts + '</select></span></div>';
     } else {
-      instRow = '<div class="ac-row"><span class="ac-key">Instance ID</span><span class="ac-val" style="font-size:11px;color:#FF4D4F;">No instances for this task</span></div>';
+      instRow = '<div class="ac-row"><span class="ac-key">Instance Code</span><span class="ac-val" style="font-size:11px;color:#FF4D4F;">No instances for this task</span></div>';
     }
-    return '<div class="msg-bubble">Please confirm the following rerun:</div><div class="r-card" id="' + uid + '-card" data-op="rerun"><div class="r-card-h">' + rerunIco + '<span class="r-card-t">Operation Confirmation: Rerun instance <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
-'<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Rerun instance (Rerun)</span></div>' +
+    var eventDateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    var eventName = eventDateStr + '_RERUN_' + name;
+    var dep = DEPS[name] || { up: [], down: [] };
+    var downInsts = [];
+    if (dep.down.length > 0) {
+      for (var di = 0; di < dep.down.length; di++) {
+        var dn = dep.down[di];
+        var dnInsts = Object.entries(INSTANCES).filter(function(e) { return e[1].task === dn; });
+        for (var dj = 0; dj < dnInsts.length; dj++) {
+          downInsts.push({ id: dnInsts[dj][0], task: dn, status: dnInsts[dj][1].status });
+        }
+      }
+    }
+    var hasPauseResume = true;
+    var pauseResumeHtml = '';
+    if (hasPauseResume) {
+      pauseResumeHtml = '<div class="ac-row" id="' + uid + '-pause-row" style="align-items:flex-start;"><span class="ac-key">Pause and Resume</span><span class="ac-val-edit" style="flex-direction:column;align-items:stretch;">' +
+        '<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;font-size:11px;color:#1890FF;cursor:pointer;" onclick="resetPauseResume(\'' + uid + '\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Reset to Project Setting</div>' +
+        '<table class="pr-table" id="' + uid + '-pr-table"><thead><tr><th>Pause At</th><th>Resume At</th><th>Pause running instance</th><th>Action</th></tr></thead><tbody>' +
+        '<tr><td><input class="ac-input" type="time" value="23:30" style="width:90px;"/></td><td><input class="ac-input" type="time" value="00:30" style="width:90px;"/></td><td><label class="toggle-switch"><input type="checkbox" checked/><span class="toggle-slider"></span></label></td><td><span class="pr-delete" onclick="deletePauseRow(this)">Delete</span></td></tr>' +
+        '</tbody></table>' +
+        '<div class="ac-add-btn" style="text-align:center;margin-top:4px;" onclick="addPauseRow(\'' + uid + '\')">+ Add</div>' +
+        '</span></div>';
+    }
+    var cascadeId = uid + '-cascade';
+    var cascadeSection = '<div id="' + cascadeId + '" style="display:none;">' +
+      '<div class="ac-row"><span class="ac-key">Concurrency</span><span class="ac-val-edit"><div class="stepper-wrap"><button type="button" class="stepper-btn" onclick="stepConcurrency(this,-1)">-</button><input class="ac-input stepper-input" type="number" value="1" min="1" max="100" onchange="validateConcurrency(this)" onblur="validateConcurrency(this)"/><button type="button" class="stepper-btn" onclick="stepConcurrency(this,1)">+</button></div><span class="ac-hint">Range 1~100</span></span></div>' +
+      pauseResumeHtml;
+    if (downInsts.length > 0) {
+      cascadeSection += '<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Downstream Instances (' + downInsts.length + ')</span><span class="ac-val-edit"><div style="max-height:140px;overflow-y:auto;font-size:11px;line-height:1.8;">';
+      for (var dii = 0; dii < downInsts.length; dii++) {
+        var bc = downInsts[dii].status === 'Failed' ? '#FF4D4F' : downInsts[dii].status === 'Running' ? '#1890FF' : downInsts[dii].status === 'Waiting' ? '#FAAD14' : '#52C41A';
+        cascadeSection += '<div style="display:flex;align-items:center;gap:4px;"><svg width="6" height="6" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="' + bc + '"/></svg><span style="color:#1890FF;cursor:pointer;" onclick="navToInstance(\'' + downInsts[dii].id + '\')">' + downInsts[dii].id + '</span><span style="color:#8C8C8C;">(' + downInsts[dii].status + ')</span></div>';
+      }
+      cascadeSection += '</div></span></div>';
+    } else if (dep.down.length > 0) {
+      cascadeSection += '<div class="ac-row"><span class="ac-key">Downstream Tasks</span><span class="ac-val" style="font-size:11px;">' + dep.down.join(', ') + '</span></div>';
+    }
+    cascadeSection += '</div>';
+
+    var summaryRow = '<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Summary On Rerun Completion</span><span class="ac-val-edit" style="flex-direction:column;align-items:stretch;"><div class="rerun-summary-list" id="' + uid + '-summary-list"></div><div class="ac-add-btn" style="text-align:center;" onclick="addRerunAlarmPolicy(\'' + uid + '\')">+ Add</div></span></div>';
+
+    return '<div class="msg-bubble">Please confirm the following rerun:</div><div class="r-card" id="' + uid + '-card" data-op="rerun"><div class="r-card-h">' + rerunIco + '<span class="r-card-t">Operation Confirmation: Rerun <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
+'<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
 instRow +
-'<div class="ac-row"><span class="ac-key">Instance date</span><span class="ac-val-edit"><input class="ac-input" type="date" value="2026-04-03" style="width:130px;"/></span></div>' +
-'<div class="ac-row"><span class="ac-key">Include Downstream</span><span class="ac-val-edit"><select class="ac-select"><option value="no" selected>No (rerun this instance only)</option><option value="yes">Yes (cascade rerun downstream)</option></select></span></div>' +
-'</div><div class="ac-warning" id="' + uid + '-warning">' + warnSvg + 'Rerun will resubmit this instance for execution and cannot be undone after confirmation.</div>' +
+'<div class="ac-row"><span class="ac-key">Event Name</span><span class="ac-val-edit"><input class="ac-input" id="' + uid + '-event-name" type="text" value="' + eventName + '" style="font-size:11px;"/></span></div>' +
+'<div class="ac-row"><span class="ac-key">Priority</span><span class="ac-val-edit"><select class="ac-select"><option value="lower">Lower priority than scheduled tasks</option><option value="same" selected>Same priority as scheduled tasks (Recommended)</option><option value="higher">Higher priority than scheduled tasks</option></select></span></div>' +
+'<div class="ac-row" id="' + uid + '-skipdep-row"><span class="ac-key">Skip Dependency</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-skipdep" value="all"/> All</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-skipdep" value="none" checked/> None</label></span></div>' +
+'<div class="ac-row"><span class="ac-key">Include Downstream</span><span class="ac-val-edit"><select class="ac-select" id="' + uid + '-downstream" onchange="toggleCascadeRerun(\'' + uid + '\',\'' + name + '\')"><option value="no" selected>No (rerun this instance only)</option><option value="yes">Yes (cascade rerun downstream)</option></select></span></div>' +
+cascadeSection +
+'<div class="ac-row"><span class="ac-key">Skip DQC</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-dqc" value="yes"/> Yes</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-dqc" value="no" checked/> No</label></span></div>' +
+summaryRow +
+'<div class="ac-row"><span class="ac-key">Individual Task Alarms</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-alarm" value="on" checked/> On</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-alarm" value="off"/> Off</label></span></div>' +
+'</div><div class="ac-warning" id="' + uid + '-warning">' + warnSvg + 'New instance(s) will be generated based on the latest submitted code version. Execution starts immediately after confirmation.</div>' +
 '<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynRerun(\'' + uid + '\',\'' + name + '\',\'' + (inst || '') + '\')">Confirm</button></div></div></div>';
   }
   if (intent.type === 'op_backfill') {
     var bfStart = intent.startDate || '2026-03-27';
     var bfEnd = intent.endDate || '2026-04-03';
     var bfDays = intent.days || (function() { var s = new Date(bfStart), e = new Date(bfEnd); return Math.round((e - s) / 86400000) + 1; })();
+    var bfEventDateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    var bfEventName = bfEventDateStr + '_BACKFILL_' + name;
+    var bfSummaryRow = '<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Summary On Backfill Completion</span><span class="ac-val-edit" style="flex-direction:column;align-items:stretch;"><div class="rerun-summary-list" id="' + uid + '-summary-list"></div><div class="ac-add-btn" style="text-align:center;" onclick="addRerunAlarmPolicy(\'' + uid + '\')">+ Add</div></span></div>';
+    var bfDep = DEPS[name] || { up: [], down: [] };
+    var bfDownHtml = '';
+    if (bfDep.down.length > 0) {
+      for (var bdi = 0; bdi < bfDep.down.length; bdi++) {
+        bfDownHtml += '<div style="display:flex;align-items:center;gap:4px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/></svg><span style="color:#1890FF;cursor:pointer;font-size:11px;" onclick="navToTask(\'' + bfDep.down[bdi] + '\')">' + bfDep.down[bdi] + '</span></div>';
+      }
+    } else {
+      bfDownHtml = '<span style="color:#8C8C8C;font-size:11px;">No downstream tasks</span>';
+    }
+    var bfPauseHtml = '<div class="ac-row" id="' + uid + '-bf-pause-row" style="align-items:flex-start;display:none;"><span class="ac-key">Pause and Resume</span><span class="ac-val-edit" style="flex-direction:column;align-items:stretch;"><table class="pr-table" id="' + uid + '-bf-pr-table"><thead><tr><th>Pause at</th><th>Resume at</th><th>Status</th><th></th></tr></thead><tbody><tr><td><input class="ac-input" type="time" value="23:30" style="width:90px;"/></td><td><input class="ac-input" type="time" value="00:30" style="width:90px;"/></td><td><label class="toggle-switch"><input type="checkbox" checked/><span class="toggle-slider"></span></label></td><td><span class="pr-delete" onclick="deletePauseRow(this)">Delete</span></td></tr></tbody></table><div class="ac-add-btn" style="text-align:center;margin-top:4px;" onclick="addBfPauseRow(\'' + uid + '\')">+ Add Schedule</div></span></div>';
     return '<div class="msg-bubble">Please confirm the following backfill:</div><div class="r-card" id="' + uid + '-card" data-op="backfill"><div class="r-card-h"><div class="r-card-ico" style="background:#E6F7FF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div><span class="r-card-t">Operation Confirmation: Backfill <span style="font-size:10px;background:#E6F7FF;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
-'<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Backfill</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
-'<div class="ac-row"><span class="ac-key">Date Range</span><span class="ac-val-edit"><div class="ac-date-range"><input class="ac-input" type="date" value="' + bfStart + '" id="' + uid + '-start" onchange="updateBackfillDays(\'' + uid + '\')"/><span style="color:#8C8C8C;">~</span><input class="ac-input" type="date" value="' + bfEnd + '" id="' + uid + '-end" onchange="updateBackfillDays(\'' + uid + '\')"/><span class="ac-hint" id="' + uid + '-days">' + bfDays + ' days total</span></div></span></div>' +
-'<div class="ac-row"><span class="ac-key">Concurrency</span><span class="ac-val-edit"><div class="stepper-wrap"><button type="button" class="stepper-btn" onclick="stepConcurrency(this,-1)">-</button><input class="ac-input stepper-input" type="number" value="1" min="1" max="100" onchange="validateConcurrency(this)" onblur="validateConcurrency(this)"/><button type="button" class="stepper-btn" onclick="stepConcurrency(this,1)">+</button></div><span class="ac-hint">Range 1~100</span></span></div>' +
-'<div class="ac-row"><span class="ac-key">Include Downstream</span><span class="ac-val-edit"><select class="ac-select"><option value="no" selected>No</option><option value="yes">Yes (cascade to downstream tasks)</option></select></span></div>' +
+'<div class="ac-row"><span class="ac-key">Event Name</span><span class="ac-val-edit"><input class="ac-input" type="text" value="' + bfEventName + '" style="font-size:11px;min-width:200px;"/></span></div>' +
+'<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Backfill Date (UTC+8)</span><span class="ac-val-edit" style="flex-direction:column;align-items:stretch;"><div class="ac-date-range"><input class="ac-input" type="date" value="' + bfStart + '" id="' + uid + '-start" onchange="updateBackfillDays(\'' + uid + '\')"/><span style="color:#8C8C8C;">&rarr;</span><input class="ac-input" type="date" value="' + bfEnd + '" id="' + uid + '-end" onchange="updateBackfillDays(\'' + uid + '\')"/></div><div class="ac-add-btn" style="text-align:center;margin-top:4px;">+ Add Range (<span id="' + uid + '-days">' + bfDays + '</span>/100)</div></span></div>' +
+'<div class="ac-row"><span class="ac-key">Backfill Target</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-target" value="both" checked onchange="toggleBfTarget(\'' + uid + '\')"/> Task Instance + Marker</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-target" value="marker" onchange="toggleBfTarget(\'' + uid + '\')"/> Marker Only</label></span></div>' +
+'<div id="' + uid + '-instance-fields">' +
+'<div class="ac-row"><span class="ac-key">Priority</span><span class="ac-val-edit"><select class="ac-select"><option value="lower" selected>Lower priority than scheduled tasks (Recommended)</option><option value="same">Same priority as scheduled tasks</option><option value="higher">Higher priority than scheduled tasks</option></select></span></div>' +
+'<div class="ac-row"><span class="ac-key">Running Mode</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-runmode" value="serial" checked onchange="toggleBfRunMode(\'' + uid + '\')"/> Serial</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-runmode" value="parallel" onchange="toggleBfRunMode(\'' + uid + '\')"/> Parallel</label></span></div>' +
+'<div class="ac-row"><span class="ac-key">Running Order</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-runorder" value="asc" checked/> Earliest to Latest</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-runorder" value="desc"/> Latest to Earliest</label></span></div>' +
+'<div class="ac-row" id="' + uid + '-bf-concurrency-row" style="display:none;"><span class="ac-key">Task Instance Concurrency</span><span class="ac-val-edit"><div class="stepper-wrap"><button type="button" class="stepper-btn" onclick="stepConcurrency(this,-1)">−</button><input class="stepper-input" type="number" value="10" min="1" max="100" onchange="validateConcurrency(this)"/><button type="button" class="stepper-btn" onclick="stepConcurrency(this,1)">+</button></div><span style="color:#8C8C8C;font-size:11px;margin-left:8px;">Range: 1-100</span></span></div>' +
+'<div class="ac-row"><span class="ac-key">Skip Dependency</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-skipdep" value="all"/> All</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-skipdep" value="none" checked/> None</label></span></div>' +
+'<div class="ac-row"><span class="ac-key">Skip DQC</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-dqc" value="yes"/> Yes</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-dqc" value="no" checked/> No</label></span></div>' +
+bfSummaryRow +
+'<div class="ac-row"><span class="ac-key">Individual Task Alarms</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-alarm" value="on" checked/> On</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-alarm" value="off"/> Off</label></span></div>' +
+'<div class="ac-row"><span class="ac-key">Cascade Downstream</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-cascade" value="yes" onchange="toggleBfCascade(\'' + uid + '\')"/> Yes</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-cascade" value="no" checked onchange="toggleBfCascade(\'' + uid + '\')"/> No</label></span></div>' +
+'<div id="' + uid + '-bf-cascade-section" style="display:none;"><div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Downstream Tasks</span><span class="ac-val-edit" style="flex-direction:column;align-items:flex-start;gap:2px;">' + bfDownHtml + '</span></div></div>' +
+bfPauseHtml +
+'</div>' +
+'<div id="' + uid + '-marker-fields" style="display:none;"><div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Summary On Backfill Completion</span><span class="ac-val-edit" style="flex-direction:column;align-items:stretch;"><div class="rerun-summary-list" id="' + uid + '-marker-summary-list"></div><div class="ac-add-btn" style="text-align:center;" onclick="addRerunAlarmPolicy(\'' + uid + '-marker\')">+ Add</div></span></div></div>' +
 '</div><div class="ac-warning" id="' + uid + '-warning">' + warnSvg + '<span id="' + uid + '-warn-text">Will create ' + bfDays + ' instances for backfill. Execution starts immediately after confirmation.</span></div>' +
 '<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynBackfill(\'' + uid + '\')">Confirm</button></div></div></div>';
   }
@@ -2362,21 +2425,20 @@ instRow +
     return '<div class="msg-bubble">Please confirm the following DQC retry:</div><div class="r-card" id="' + uid + '-card" data-op="dqc"><div class="r-card-h"><div class="r-card-ico" style="background:#FFF7E6"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FA8C16" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><span class="r-card-t">Operation Confirmation: Retry DQC <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Retry DQC</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
-'<div class="ac-row"><span class="ac-key">Instance ID</span><span class="ac-val" style="font-size:11px;">' + dqcInst + '</span></div>' +
+'<div class="ac-row"><span class="ac-key">Task Instance Code</span><span class="ac-val" style="font-size:11px;">' + dqcInst + '</span></div>' +
 '</div><div class="ac-warning" id="' + uid + '-warning">' + warnSvg + 'Will rerun the DQC check.</div>' +
 '<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynDQC(\'' + uid + '\',\'' + name + '\',\'' + dqcInst + '\')">Confirm</button></div></div></div>';
   }
-  const opMap = { op_freeze: 'Freeze', op_unfreeze: 'Unfreeze', op_kill: 'Kill', op_priority: 'Adjust Priority', op_alarm: 'Alarm' };
+  const opMap = { op_freeze: 'Freeze', op_unfreeze: 'Unfreeze', op_kill: 'Kill', op_priority: 'Adjust Priority', op_alarm: 'Alarm', op_mark_success: 'Mark Success', op_trigger_now: 'Trigger Now' };
   const opn = opMap[intent.type] || 'Operation';
   if (intent.type === 'op_freeze') {
     var dep = DEPS[name] || { up: [], down: [] };
     var downHtml = '';
     if (dep.down.length > 0) {
-      downHtml = '<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Potentially affected downstream</span><span class="ac-val" style="display:flex;flex-direction:column;gap:4px;text-align:left;">';
+      downHtml = '<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Potentially affected downstream</span><span class="ac-val-edit" style="flex-direction:column;align-items:flex-start;gap:4px;">';
       for (var di = 0; di < dep.down.length; di++) {
         var dn = dep.down[di];
-        var dt = TASKS[dn] || {};
-        downHtml += '<span style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#FA8C16" stroke-width="2" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span style="color:#1890FF;cursor:pointer;white-space:nowrap;" onclick="navToTask(\'' + dn + '\')">' + dn + '</span></span>';
+        downHtml += '<div style="display:flex;align-items:center;gap:4px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#FA8C16" stroke-width="2" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span style="color:#1890FF;cursor:pointer;" onclick="navToTask(\'' + dn + '\')">' + dn + '</span></div>';
       }
       downHtml += '</span></div>';
     }
@@ -2433,16 +2495,79 @@ downHtml +
     return '<div class="msg-bubble">Please confirm the following skip dependency:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#FFF7E6"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D46B08" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div><span class="r-card-t">Operation Confirmation: Skip Dependency <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Skip Dependency</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
-'<div class="ac-row"><span class="ac-key">Instance ID</span><span class="ac-val" style="font-size:11px;">' + skipInst + '</span></div>' +
+'<div class="ac-row"><span class="ac-key">Task Instance Code</span><span class="ac-val" style="font-size:11px;">' + skipInst + '</span></div>' +
 upListHtml +
 '</div><div class="ac-warning" id="' + uid + '-warning" style="border-color:#FFD591;">' + warnSvg + 'After skipping dependencies, this instance will no longer wait for upstream completion and will start immediately. <strong>Ensure missing upstream data will not affect the correctness of this task.</strong></div>' +
 '<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynGeneric(\'' + uid + '\',\'Skip Dependency\',\'' + name + '\',\'' + skipInst + '\')">Confirm</button></div></div></div>';
+  }
+  if (intent.type === 'op_kill') {
+    var killInst = inst || Object.keys(INSTANCES).find(function(k) { return INSTANCES[k].task === name; }) || '';
+    var killStatus = killInst && INSTANCES[killInst] ? INSTANCES[killInst].status : 'Unknown';
+    var killStatusCls = killStatus === 'Running' ? 'running' : killStatus === 'Failed' ? 'failed' : killStatus === 'Waiting' ? 'waiting' : 'success';
+    return '<div class="msg-bubble">Please confirm the following kill:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#FFF1F0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF4D4F" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div><span class="r-card-t">Operation Confirmation: Kill <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
+'<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Kill (Terminate)</span></div>' +
+'<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
+'<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
+'<div class="ac-row"><span class="ac-key">Task Instance Code</span><span class="ac-val" style="font-size:11px;">' + killInst + '</span></div>' +
+'<div class="ac-row"><span class="ac-key">Current Status</span><span class="ac-val"><span class="status-badge ' + killStatusCls + '" style="font-size:10px;padding:1px 8px;">' + killStatus + '</span></span></div>' +
+'</div><div class="ac-warning" id="' + uid + '-warning" style="border-color:#FFA39E;">' + warnSvg + 'This will <strong>immediately terminate</strong> the running instance. The instance status will change to "Failed". This action cannot be undone.</div>' +
+'<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" style="background:linear-gradient(135deg,#FF4D4F,#FF7875);" onclick="confirmDynGeneric(\'' + uid + '\',\'Kill\',\'' + name + '\',\'' + killInst + '\',\'instance\')">Confirm Kill</button></div></div></div>';
+  }
+  if (intent.type === 'op_mark_success') {
+    var msInst = inst || Object.keys(INSTANCES).find(function(k) { return INSTANCES[k].task === name && INSTANCES[k].status !== 'Successful'; }) || '';
+    var msStatus = msInst && INSTANCES[msInst] ? INSTANCES[msInst].status : 'Unknown';
+    var msStatusCls = msStatus === 'Running' ? 'running' : msStatus === 'Failed' ? 'failed' : msStatus === 'Waiting' ? 'waiting' : 'success';
+    var dep = DEPS[name] || { up: [], down: [] };
+    var msDownHint = '';
+    if (dep.down.length > 0) {
+      msDownHint = '<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Downstream tasks to unblock</span><span class="ac-val-edit" style="flex-direction:column;align-items:flex-start;gap:2px;font-size:11px;">';
+      for (var mdi = 0; mdi < dep.down.length; mdi++) {
+        msDownHint += '<span style="color:#1890FF;cursor:pointer;" onclick="navToTask(\'' + dep.down[mdi] + '\')">' + dep.down[mdi] + '</span>';
+      }
+      msDownHint += '</span></div>';
+    }
+    return '<div class="msg-bubble">Please confirm the following mark success:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F6FFED"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#52C41A" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><span class="r-card-t">Operation Confirmation: Mark Success <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
+'<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Mark Success</span></div>' +
+'<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
+'<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
+'<div class="ac-row"><span class="ac-key">Task Instance Code</span><span class="ac-val" style="font-size:11px;">' + msInst + '</span></div>' +
+'<div class="ac-row"><span class="ac-key">Current Status</span><span class="ac-val"><span class="status-badge ' + msStatusCls + '" style="font-size:10px;padding:1px 8px;">' + msStatus + '</span> &rarr; <span class="status-badge success" style="font-size:10px;padding:1px 8px;">Successful</span></span></div>' +
+msDownHint +
+'</div><div class="ac-warning" id="' + uid + '-warning" style="border-color:#FFD591;">' + warnSvg + 'This will forcibly mark the instance as <strong>Successful</strong> without actual execution. Downstream tasks that depend on this instance will be unblocked. <strong>Ensure the output data is correct or not needed.</strong></div>' +
+'<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynGeneric(\'' + uid + '\',\'Mark Success\',\'' + name + '\',\'' + msInst + '\',\'instance\')">Confirm</button></div></div></div>';
+  }
+  if (intent.type === 'op_trigger_now') {
+    var tnInst = Object.keys(INSTANCES).find(function(k) { return INSTANCES[k].task === name; }) || '';
+    var tnHasRun = tnInst && INSTANCES[tnInst] && (INSTANCES[tnInst].status === 'Successful' || INSTANCES[tnInst].status === 'Failed' || INSTANCES[tnInst].status === 'Running');
+    var tnStatus = tnInst && INSTANCES[tnInst] ? INSTANCES[tnInst].status : 'Not Executed';
+    var tnStatusCls = tnStatus === 'Running' ? 'running' : tnStatus === 'Failed' ? 'failed' : tnStatus === 'Waiting' ? 'waiting' : tnStatus === 'Successful' ? 'success' : '';
+    var tnBizDate = new Date().toISOString().slice(0, 10);
+    var tnNote = '';
+    var tnScheduleOption = '';
+    if (tnHasRun) {
+      tnNote = '<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Execution Status</span><span class="ac-val"><span class="status-badge ' + tnStatusCls + '" style="font-size:10px;padding:1px 8px;">' + tnStatus + '</span><span style="font-size:11px;color:#FA8C16;margin-left:6px;">Instance already executed for this business date</span></span></div>';
+    } else {
+      tnNote = '<div class="ac-row"><span class="ac-key">Execution Status</span><span class="ac-val"><span style="font-size:11px;color:#8C8C8C;">Not yet executed for this business date</span></span></div>';
+      tnScheduleOption = '<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Execute at scheduled time</span><span class="ac-val-edit" style="flex-direction:column;align-items:flex-start;gap:4px;"><label class="ac-radio-label"><input type="radio" name="' + uid + '-schedrun" value="yes" checked/> Yes (still execute at scheduled time)</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-schedrun" value="no"/> No (skip the scheduled execution)</label><span class="ac-hint">Whether to also run this instance at the originally scheduled time</span></span></div>';
+    }
+    var tnWarnMsg = tnHasRun
+      ? 'This business date instance has already been executed (status: <strong>' + tnStatus + '</strong>). Trigger Now will <strong>re-execute</strong> this instance immediately with the latest code version.'
+      : 'This will <strong>immediately execute</strong> the instance for today\'s business date. The instance will start without waiting for its scheduled time.';
+    return '<div class="msg-bubble">Please confirm the following trigger now:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F9F0FF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div><span class="r-card-t">Operation Confirmation: Trigger Now <span style="font-size:10px;background:#E6F7FF;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
+'<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Trigger Now</span></div>' +
+'<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
+'<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
+'<div class="ac-row"><span class="ac-key">Business Date</span><span class="ac-val">' + tnBizDate + '</span></div>' +
+tnNote +
+tnScheduleOption +
+'</div><div class="ac-warning" id="' + uid + '-warning">' + warnSvg + tnWarnMsg + '</div>' +
+'<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynGeneric(\'' + uid + '\',\'Trigger Now\',\'' + name + '\',\'\',\'task\')">Confirm</button></div></div></div>';
   }
   var levelTag = (intent.level === 'instance') ? '<span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span>' : '<span style="font-size:10px;background:#E6F7FF;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span>';
   return '<div class="msg-bubble">Please confirm the following ' + opn + ':</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><span class="r-card-t">Operation Confirmation: ' + opn + ' ' + levelTag + '</span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">' + opn + '</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
-((inst || (intent.level === 'instance')) ? '<div class="ac-row"><span class="ac-key">Instance ID</span><span class="ac-val" style="font-size:11px;">' + (inst || Object.keys(INSTANCES).find(function(k) { return INSTANCES[k].task === name; }) || '') + '</span></div>' : '') +
+((inst || (intent.level === 'instance')) ? '<div class="ac-row"><span class="ac-key">Task Instance Code</span><span class="ac-val" style="font-size:11px;">' + (inst || Object.keys(INSTANCES).find(function(k) { return INSTANCES[k].task === name; }) || '') + '</span></div>' : '') +
 '</div><div class="ac-warning" id="' + uid + '-warning">' + warnSvg + 'Execution starts immediately after confirmation. Please verify carefully.</div>' +
 '<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynGeneric(\'' + uid + '\',\'' + opn + '\',\'' + name + '\',\'' + (inst || Object.keys(INSTANCES).find(function(k) { return INSTANCES[k].task === name; }) || '') + '\',\'' + intent.level + '\')">Confirm</button></div></div></div>';
 }
@@ -2450,7 +2575,7 @@ upListHtml +
 function genUnsupported() {
   return '<div class="response-wrap"><div class="msg-bubble" style="border:none;padding:0;">' +
 '<div style="display:flex;align-items:flex-start;gap:8px;padding:10px 14px;background:linear-gradient(135deg,#FFFBE6 0%,#FFF7E6 100%);border:1px solid #FFE58F;border-radius:8px;margin-bottom:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D46B08" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><div style="font-size:12px;color:#D46B08;line-height:1.6;">This operation is not supported via AI assistant.</div></div>' +
-'<div class="r-card" style="margin-top:0;"><div class="r-card-b" style="padding:12px 14px;"><div style="font-size:12px;color:#595959;margin-bottom:8px;font-weight:600;">Supported Operations</div><div style="font-size:11px;color:#8C8C8C;margin-bottom:4px;">Instance Level</div><div class="ops-list"><span class="ops-tag allowed">Rerun</span><span class="ops-tag allowed">Kill</span><span class="ops-tag allowed">Skip Dependency</span><span class="ops-tag allowed">Mark Success</span><span class="ops-tag allowed">Retry DQC</span></div><div style="font-size:11px;color:#8C8C8C;margin-bottom:4px;margin-top:10px;">Task Level</div><div class="ops-list"><span class="ops-tag allowed">Backfill</span><span class="ops-tag allowed">Freeze/Unfreeze</span><span class="ops-tag allowed">Priority</span><span class="ops-tag allowed">Alarm</span></div></div></div>' +
+'<div class="r-card" style="margin-top:0;"><div class="r-card-b" style="padding:12px 14px;"><div style="font-size:12px;color:#595959;margin-bottom:8px;font-weight:600;">Supported Operations</div><div style="font-size:11px;color:#8C8C8C;margin-bottom:4px;">Instance Level</div><div class="ops-list"><span class="ops-tag allowed">Rerun</span><span class="ops-tag allowed">Kill</span><span class="ops-tag allowed">Skip Dependency</span><span class="ops-tag allowed">Mark Success</span><span class="ops-tag allowed">Retry DQC</span></div><div style="font-size:11px;color:#8C8C8C;margin-bottom:4px;margin-top:10px;">Task Level</div><div class="ops-list"><span class="ops-tag allowed">Backfill</span><span class="ops-tag allowed">Freeze/Unfreeze</span><span class="ops-tag allowed">Priority</span><span class="ops-tag allowed">Trigger Now</span><span class="ops-tag allowed">Alarm</span></div></div></div>' +
 '</div></div>';
 }
 
@@ -2616,6 +2741,57 @@ function showProcessingSteps(conv, steps) {
   });
 }
 
+function addRerunAlarmPolicy(uid) {
+  var list = document.getElementById(uid + '-summary-list');
+  if (!list) return;
+  var policyOpts = ALARM_POLICIES.map(function(p) {
+    return '<option value="' + p.name + '">' + p.name + '</option>';
+  }).join('');
+  var item = document.createElement('div');
+  item.className = 'rerun-policy-item';
+  item.innerHTML = '<select class="ac-select" style="flex:1;min-width:140px;"><option value="">Please select alarm policy</option>' + policyOpts + '</select><button type="button" class="pr-delete-btn" onclick="this.parentElement.remove()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>';
+  list.appendChild(item);
+}
+
+function addPauseRow(uid) {
+  var tbody = document.querySelector('#' + uid + '-pr-table tbody');
+  if (!tbody) return;
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td><input class="ac-input" type="time" value="23:30" style="width:90px;"/></td><td><input class="ac-input" type="time" value="00:30" style="width:90px;"/></td><td><label class="toggle-switch"><input type="checkbox" checked/><span class="toggle-slider"></span></label></td><td><span class="pr-delete" onclick="deletePauseRow(this)">Delete</span></td>';
+  tbody.appendChild(tr);
+}
+function deletePauseRow(el) { el.closest('tr').remove(); }
+function resetPauseResume(uid) {
+  var tbody = document.querySelector('#' + uid + '-pr-table tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td><input class="ac-input" type="time" value="23:30" style="width:90px;"/></td><td><input class="ac-input" type="time" value="00:30" style="width:90px;"/></td><td><label class="toggle-switch"><input type="checkbox" checked/><span class="toggle-slider"></span></label></td><td><span class="pr-delete" onclick="deletePauseRow(this)">Delete</span></td></tr>';
+}
+
+function toggleCascadeRerun(uid, taskName) {
+  var sel = document.getElementById(uid + '-downstream');
+  var sec = document.getElementById(uid + '-cascade');
+  var skipDepRow = document.getElementById(uid + '-skipdep-row');
+  var eventInput = document.getElementById(uid + '-event-name');
+  if (!sel || !sec) return;
+  var isCascade = sel.value === 'yes';
+  sec.style.display = isCascade ? '' : 'none';
+  if (skipDepRow) skipDepRow.style.display = isCascade ? 'none' : '';
+  if (eventInput && taskName) {
+    var dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    eventInput.value = dateStr + (isCascade ? '_CASC_RERUN_' : '_RERUN_') + taskName;
+  }
+  var warnEl = document.getElementById(uid + '-warning');
+  if (warnEl) {
+    var warnSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>';
+    if (isCascade) {
+      warnEl.innerHTML = warnSvg + 'Cascade rerun will re-execute this instance <strong>and all downstream instances</strong>. Execution starts immediately after confirmation.';
+    } else {
+      warnEl.innerHTML = warnSvg + 'New instance(s) will be generated based on the latest submitted code version. Execution starts immediately after confirmation.';
+    }
+  }
+  scrollActiveConv();
+}
+
 function triggerDynRerun(uid, name, inst) {
   const conv = document.querySelector('.conv-container.active');
   appendAgentMsg(conv, genOperationConfirm({ type: 'op_rerun', level: 'instance' }, { taskName: name, instanceId: inst }));
@@ -2634,7 +2810,9 @@ function confirmDynRerun(uid, taskName, instId) {
     var sel = params && params.querySelector('.ac-select');
     if (sel) resolvedInst = sel.value;
   }
-  var linkHtml = resolvedInst ? '<a class="acd-link" onclick="linkTo(\'view-detail\',null,{taskName:\'' + taskName + '\',instanceId:\'' + resolvedInst + '\'})">View Instance Details →</a>' : '';
+  var eventInput = document.querySelector('#' + uid + '-card input[id$="-event-name"]');
+  var eventName = eventInput ? eventInput.value : '';
+  var linkHtml = '<a class="acd-link" onclick="navToRerunEvent(\'' + taskName + '\',\'' + eventName + '\')">View Execution Details →</a>';
   if (btns) btns.innerHTML = '<div class="ac-done confirmed"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">Submitted successfully</div><div class="acd-sub">Instance added to scheduler queue</div></div>' + linkHtml + '</div>';
   showToast('Submitted successfully!');
   scrollActiveConv();
@@ -2651,6 +2829,45 @@ function validateConcurrency(input) {
   var val = parseInt(input.value);
   if (isNaN(val) || val < 1) input.value = 1;
   else if (val > 100) input.value = 100;
+}
+
+function toggleBfTarget(uid) {
+  var radios = document.querySelectorAll('input[name="' + uid + '-target"]');
+  var val = 'both';
+  for (var i = 0; i < radios.length; i++) { if (radios[i].checked) val = radios[i].value; }
+  var instFields = document.getElementById(uid + '-instance-fields');
+  var markerFields = document.getElementById(uid + '-marker-fields');
+  if (instFields) instFields.style.display = val === 'both' ? '' : 'none';
+  if (markerFields) markerFields.style.display = val === 'marker' ? '' : 'none';
+  scrollActiveConv();
+}
+
+function toggleBfRunMode(uid) {
+  var radios = document.querySelectorAll('input[name="' + uid + '-runmode"]');
+  var val = 'serial';
+  for (var i = 0; i < radios.length; i++) { if (radios[i].checked) val = radios[i].value; }
+  var concRow = document.getElementById(uid + '-bf-concurrency-row');
+  if (concRow) concRow.style.display = val === 'parallel' ? '' : 'none';
+  scrollActiveConv();
+}
+
+function toggleBfCascade(uid) {
+  var radios = document.querySelectorAll('input[name="' + uid + '-cascade"]');
+  var val = 'no';
+  for (var i = 0; i < radios.length; i++) { if (radios[i].checked) val = radios[i].value; }
+  var sec = document.getElementById(uid + '-bf-cascade-section');
+  var pauseRow = document.getElementById(uid + '-bf-pause-row');
+  if (sec) sec.style.display = val === 'yes' ? '' : 'none';
+  if (pauseRow) pauseRow.style.display = val === 'yes' ? '' : 'none';
+  scrollActiveConv();
+}
+
+function addBfPauseRow(uid) {
+  var tbody = document.querySelector('#' + uid + '-bf-pr-table tbody');
+  if (!tbody) return;
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td><input class="ac-input" type="time" value="23:30" style="width:90px;"/></td><td><input class="ac-input" type="time" value="00:30" style="width:90px;"/></td><td><label class="toggle-switch"><input type="checkbox" checked/><span class="toggle-slider"></span></label></td><td><span class="pr-delete" onclick="deletePauseRow(this)">Delete</span></td>';
+  tbody.appendChild(tr);
 }
 
 function updateBackfillDays(uid) {
@@ -2972,6 +3189,7 @@ function genFollowUpSuggestions(intentType, ctx, userText) {
     case 'op_kill':
     case 'op_skip_dep':
     case 'op_dqc':
+    case 'op_mark_success':
       suggestions = [
         inst ? 'View dependencies of instance ' + inst : 'View instance dependencies',
         name ? 'Explain the code logic of ' + name : 'View code logic',
@@ -2982,6 +3200,7 @@ function genFollowUpSuggestions(intentType, ctx, userText) {
     case 'op_freeze':
     case 'op_unfreeze':
     case 'op_priority':
+    case 'op_trigger_now':
       suggestions = [
         name ? 'What are the dependencies of task ' + name : 'View dependencies',
         'Which tasks have high priority',
@@ -3136,7 +3355,8 @@ async function simulateSendWithText(text) {
     case 'op_rerun':
     case 'op_dqc':
     case 'op_kill':
-    case 'op_skip_dep': {
+    case 'op_skip_dep':
+    case 'op_mark_success': {
       if (!currentContext.taskName && !currentContext.instanceId) {
         response = '<div class="response-wrap"><div class="msg-bubble" style="border:none;padding:10px 14px;">Please provide the <strong>instance ID</strong> for the operation (e.g. <code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">di_scheduler.studio_xxx_DAY_1</code>). I will generate an operation confirmation for you.<br><br>You can also use <strong>Inspect</strong> or <strong>Diagnose</strong> to locate specific instances first.</div></div>';
       } else {
@@ -3148,6 +3368,7 @@ async function simulateSendWithText(text) {
     case 'op_freeze':
     case 'op_unfreeze':
     case 'op_priority':
+    case 'op_trigger_now':
     case 'op_alarm': {
       if (!currentContext.taskName) {
         response = '<div class="response-wrap"><div class="msg-bubble" style="border:none;padding:10px 14px;">Please provide the <strong>task name</strong> for the operation (e.g. <code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">update_table</code>). I will generate an operation confirmation for you.</div></div>';
@@ -3164,7 +3385,7 @@ async function simulateSendWithText(text) {
     capability_intro: 'Capability Introduction',
     diagnosis_failure: 'Instance Failure Diagnosis', diagnosis_slow: 'Instance Slowdown Analysis', diagnosis_waiting: 'Instance Wait Analysis',
     diagnosis_resource: 'Resource Analysis', diagnosis_auto: 'Intelligent Diagnosis', search_instances: 'Instance Search', search_tasks: 'Task Search', info_dependency: 'Dependency Query', info_code: 'Code Explanation', info_priority: 'Priority Query', patrol: 'Run Inspection',
-    op_rerun: 'Rerun Operation', op_backfill: 'Backfill', op_dqc: 'DQC Retry', op_priority: 'Priority Change', op_kill: 'Kill Operation', op_skip_dep: 'Skip Dependency', op_freeze: 'Freeze Operation', op_unfreeze: 'Unfreeze Operation', unsupported: 'Security Check'
+    op_rerun: 'Rerun Operation', op_backfill: 'Backfill', op_dqc: 'DQC Retry', op_priority: 'Priority Change', op_kill: 'Kill Operation', op_skip_dep: 'Skip Dependency', op_freeze: 'Freeze Operation', op_unfreeze: 'Unfreeze Operation', op_mark_success: 'Mark Success', op_trigger_now: 'Trigger Now', unsupported: 'Security Check'
   }[intent.type] || intent.type || 'general';
 
   var activeS = SessionManager.getSession(activeConvId);
@@ -3425,6 +3646,18 @@ renderSessionTabs();
 (function() {
   var wc = document.getElementById('conv-welcome');
   if (wc && wc.children.length === 0) wc.innerHTML = buildWelcomeCardHtml();
+})();
+
+// Populate preset backfill card with dynamic content
+(function() {
+  var body = document.getElementById('preset-backfill-body');
+  if (body) {
+    var cardHtml = genOperationConfirm(
+      { type: 'op_backfill', level: 'task' },
+      { taskName: 'update_table', taskCode: 'di_scheduler.studio_6801187', instanceId: null }
+    );
+    body.innerHTML = cardHtml + getMsgActionsHtml();
+  }
 })();
 
 // Populate conv-large-dep with generated dependency content
