@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.cursor.ops-agent</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>mkdir -p '/Users/fengwen.cheng/.ops-agent-runtime/logs' &amp;&amp; exec /usr/bin/env PORT=8799 python3 '/Users/fengwen.cheng/.ops-agent-runtime/app/server.py'</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/fengwen.cheng/.ops-agent-runtime/app</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/fengwen.cheng/.ops-agent-runtime/logs/launchd.stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/fengwen.cheng/.ops-agent-runtime/logs/launchd.stderr.log</string>
+</dict>
+</plist>

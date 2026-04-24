@@ -702,9 +702,9 @@ function updateLineage(taskName) {
     if (isCurrent) {
       var metaHtml = priLabel;
       if (statusText) metaHtml += ' · <span style="color:' + statusColor + '">' + statusText + '</span>';
-      return '<div class="dag-node current"><div class="dag-node-icon" style="background:#F9F0FF;color:#722ED1;">SQL</div><div class="dag-node-info"><div class="dag-node-name">' + name + '</div><div class="dag-node-meta">' + metaHtml + '</div></div><button style="border:none;background:none;color:#8C8C8C;cursor:pointer;font-size:16px;padding:0 4px;">···</button></div>';
+      return '<div class="dag-node current"><div class="dag-node-icon" style="background:#F0F2F5;color:#1890FF;">SQL</div><div class="dag-node-info"><div class="dag-node-name">' + name + '</div><div class="dag-node-meta">' + metaHtml + '</div></div><button style="border:none;background:none;color:#8C8C8C;cursor:pointer;font-size:16px;padding:0 4px;">···</button></div>';
     }
-    return '<div class="dag-node" onclick="navToTask(\'' + name + '\')"><div class="dag-node-icon" style="background:#E6F7FF;color:#1890FF;">SQL</div><div class="dag-node-info"><div class="dag-node-name">' + name + '</div><div class="dag-node-meta">' + priLabel + '</div></div></div>';
+    return '<div class="dag-node" onclick="navToTask(\'' + name + '\')"><div class="dag-node-icon" style="background:#F0F2F5;color:#1890FF;">SQL</div><div class="dag-node-info"><div class="dag-node-name">' + name + '</div><div class="dag-node-meta">' + priLabel + '</div></div></div>';
   }
   var arrowH = '<div class="dag-arrow-h"><svg width="40" height="12" viewBox="0 0 40 12"><path d="M0 6h32" stroke="#BFBFBF" stroke-width="1.5" fill="none"/><path d="M30 2l6 4-6 4" stroke="#BFBFBF" stroke-width="1.5" fill="none"/></svg></div>';
   if (dep.up.length === 0 && dep.down.length === 0) {
@@ -775,9 +775,9 @@ function updateInstanceLineage(instanceId) {
     var instId = latestInst ? latestInst[0] : '';
     var instStatus = latestInst ? latestInst[1].status : 'Unknown';
     var statusColor = instStatus === 'Failed' ? '#FF4D4F' : instStatus === 'Running' ? '#FA8C16' : instStatus === 'Waiting' ? '#D46B08' : '#52C41A';
-    var bgColor = isCurrent ? 'background:#F9F0FF;' : '';
-    var borderColor = isCurrent ? 'border-color:#722ED1;box-shadow:0 2px 8px rgba(114,46,209,.15);' : '';
-    var iconBg = isCurrent ? 'background:#F9F0FF;color:#722ED1;' : 'background:#E6F7FF;color:#1890FF;';
+    var bgColor = isCurrent ? 'background:#F0F2F5;' : '';
+    var borderColor = isCurrent ? 'border-color:#1890FF;box-shadow:0 2px 8px rgba(24,144,255,.15);' : '';
+    var iconBg = isCurrent ? 'background:#F0F2F5;color:#1890FF;' : 'background:#F0F2F5;color:#1890FF;';
     var clickAttr = isCurrent ? '' : ' onclick="navToInstance(\'' + instId + '\')"';
     var extraBtn = isCurrent ? '<button style="border:none;background:none;color:#8C8C8C;cursor:pointer;font-size:16px;padding:0 4px;">···</button>' : '';
     return '<div class="dag-node' + (isCurrent ? ' current' : '') + '"' + clickAttr + ' style="' + bgColor + borderColor + '">' +
@@ -994,7 +994,7 @@ function genLogSummary(instanceId) {
   var html = '<div class="msg-bubble" style="margin-top:4px;">Opened <strong>System Log</strong> for <strong>' + taskName + '</strong> on the left panel.' +
     '<div style="margin-top:10px;padding:12px 14px;background:linear-gradient(135deg,#FAFBFF 0%,#F5F7FF 100%);border:1px solid #E8ECF4;border-radius:8px;">' +
     '<div style="font-size:12px;font-weight:600;color:#333;margin-bottom:8px;display:flex;align-items:center;gap:6px;">' +
-    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>' +
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>' +
     'Log Summary</div>' +
     '<div style="font-size:12px;color:#595959;line-height:1.8;">';
 
@@ -1042,7 +1042,7 @@ function genLogSummary(instanceId) {
     var diagInst = instanceId;
     html += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid #F0F0F0;font-size:11.5px;color:#8C8C8C;">' +
       'For root cause analysis and fix suggestions, use ' +
-      '<a style="color:#722ED1;cursor:pointer;text-decoration:none;font-weight:500;" onclick="simulateSendWithText(\'Diagnose instance ' + diagInst + '\')">Diagnose</a>.' +
+      '<a style="color:#1890FF;cursor:pointer;text-decoration:none;font-weight:500;" onclick="simulateSendWithText(\'Diagnose instance ' + diagInst + '\')">Diagnose</a>.' +
       '</div>';
   }
 
@@ -1125,7 +1125,7 @@ function linkTo(viewId, btnId, ctxOverride, withCodeSummary) {
       } else if (viewId === 'view-code') {
         if (withCodeSummary) {
           var codeSummary = TASK_CODE_SUMMARIES[resolvedTask] || 'This task is a <strong>Spark SQL</strong> daily batch job.';
-          annotation = '<div class="msg-bubble" style="margin-top:4px;">Opened code for <strong>' + resolvedTask + '</strong> on the left panel.<br><br><div style="margin-top:6px;padding:10px 14px;background:linear-gradient(135deg,#FAFBFF 0%,#F5F7FF 100%);border:1px solid #E8ECF4;border-radius:8px;"><div style="font-size:12px;font-weight:600;color:#333;margin-bottom:6px;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>Code Logic Summary</div><div style="font-size:12px;color:#595959;line-height:1.7;">' + codeSummary + '</div></div></div>';
+          annotation = '<div class="msg-bubble" style="margin-top:4px;">Opened code for <strong>' + resolvedTask + '</strong> on the left panel.<br><br><div style="margin-top:6px;padding:10px 14px;background:linear-gradient(135deg,#FAFBFF 0%,#F5F7FF 100%);border:1px solid #E8ECF4;border-radius:8px;"><div style="font-size:12px;font-weight:600;color:#333;margin-bottom:6px;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>Code Logic Summary</div><div style="font-size:12px;color:#595959;line-height:1.7;">' + codeSummary + '</div></div></div>';
         } else {
           annotation = '<div class="msg-bubble" style="margin-top:4px;">Opened code for <strong>' + resolvedTask + '</strong> on the left panel.</div>';
         }
@@ -1394,7 +1394,7 @@ function startTabRename(sessionId, tabEl) {
   input.type = 'text';
   input.value = currentTitle;
   input.className = 'stb-tab-rename-input';
-  input.style.cssText = 'width:100%;border:1px solid #722ED1;border-radius:3px;font-size:12px;padding:1px 4px;outline:none;height:20px;box-sizing:border-box;background:#fff;color:#333;';
+  input.style.cssText = 'width:100%;border:1px solid #1890FF;border-radius:3px;font-size:12px;padding:1px 4px;outline:none;height:20px;box-sizing:border-box;background:#fff;color:#333;';
   titleSpan.replaceWith(input);
   input.focus();
   input.select();
@@ -1553,9 +1553,9 @@ function buildWelcomeCardHtml() {
       '<div class="wc-hero-text">Hi, I\'m your <b>Intelligent Ops Agent</b></div>' +
     '</div>' +
     '<div class="wc-desc">I can identify anomalous instances, diagnose failures and pinpoint root causes, answer questions about tasks and instances in natural language, and execute ops actions like rerun or backfill on your behalf.</div>' +
-    '<div class="wc-try-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Try asking me</div>' +
+    '<div class="wc-try-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Try asking me</div>' +
     '<div class="wc-examples">' +
-      '<div class="wc-example" onclick="fillInput(\'Diagnose why instance di_scheduler.studio_6801187_20260403_DAY_2 failed\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg><span>Diagnose why instance studio_6801187_DAY_2 failed</span></div>' +
+      '<div class="wc-example" onclick="fillInput(\'Diagnose why instance di_scheduler.studio_6801187_20260403_DAY_2 failed\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg><span>Diagnose why instance studio_6801187_DAY_2 failed</span></div>' +
       '<div class="wc-example" onclick="fillInput(\'Show upstream and downstream dependencies for task update_table\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2" style="flex-shrink:0"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg><span>Show dependencies for task update_table</span></div>' +
       '<div class="wc-example" onclick="fillInput(\'Any anomalies in today\\\'s task runs?\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FA8C16" stroke-width="2" style="flex-shrink:0"><path d="M18 20V10M12 20V4M6 20v-6"/></svg><span>Any anomalies in today\'s task runs?</span></div>' +
     '</div>' +
@@ -1944,7 +1944,7 @@ function resourceBars() {
   return '<div class="resource-grid">' +
 '<div class="resource-cell"><div class="rc-m-label">Memory</div><div class="rc-m-val">7.2 / 8 GB</div><div class="rc-m-bar"><div class="rc-m-fill" style="width:90%;background:#FA8C16;"></div></div></div>' +
 '<div class="resource-cell"><div class="rc-m-label">CPU</div><div class="rc-m-val">avg 68%</div><div class="rc-m-bar"><div class="rc-m-fill" style="width:68%;background:#1890FF;"></div></div></div>' +
-'<div class="resource-cell"><div class="rc-m-label">Shuffle Read</div><div class="rc-m-val">9.1 GB</div><div class="rc-m-bar"><div class="rc-m-fill" style="width:72%;background:#722ED1;"></div></div></div>' +
+'<div class="resource-cell"><div class="rc-m-label">Shuffle Read</div><div class="rc-m-val">9.1 GB</div><div class="rc-m-bar"><div class="rc-m-fill" style="width:72%;background:#1890FF;"></div></div></div>' +
 '<div class="resource-cell"><div class="rc-m-label">Disk Spill</div><div class="rc-m-val">120 MB</div><div class="rc-m-bar"><div class="rc-m-fill" style="width:15%;background:#52C41A;"></div></div></div>' +
 '</div><div class="rc-section" style="margin-top:8px;"><div class="rc-label">Compared with 7-day average</div><div class="rc-value">Memory peak +18%, Shuffle +24%, consistent with data volume +35%.</div></div>';
 }
@@ -1959,10 +1959,10 @@ function genDiagnosisFailure(ctx) {
 '<div class="rc-section"><div class="rc-label">Error Type</div><span class="rc-error-type">OutOfMemoryError（OOM）</span></div>' +
 '<div class="rc-section" style="margin-bottom:0;"><div class="rc-label">Direct Cause</div><div class="rc-value">Executor memory limit <strong>8GB</strong> exceeded (peak <strong>8.1GB</strong>), YARN Kill Container; <strong>COLLECT_LIST</strong> causes data skew on hot keys.</div></div>' +
 '</div></div>' +
-'<div class="r-card" style="margin-top:0;border-top:1px solid #F0F0F0;"><div class="r-card-h"><div class="r-card-ico" style="background:#E6F7FF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg></div><span class="r-card-t">Fix Suggestions</span></div><div class="r-card-b"><div class="rc-suggestions">' +
+'<div class="r-card" style="margin-top:0;border-top:1px solid #F0F0F0;"><div class="r-card-h"><div class="r-card-ico" style="background:#F0F2F5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg></div><span class="r-card-t">Fix Suggestions</span></div><div class="r-card-b"><div class="rc-suggestions">' +
 '<div class="rc-sug-item"><span><code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">spark.executor.memory</code> Current <strong>8g</strong> → Recommended <strong>12g</strong></span><button type="button" class="apply-btn" onclick="applyFix(this,\'spark.executor.memory\',\'12g\')">Apply</button></div>' +
 '<div class="rc-sug-item"><span><code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">spark.sql.shuffle.partitions</code> Current <strong>200</strong> → Recommended <strong>320</strong>, reduce data volume per partition</span><button type="button" class="apply-btn" onclick="applyFix(this,\'spark.sql.shuffle.partitions\',\'320\')">Apply</button></div>' +
-'<div class="rc-sug-item"><span>Hot key: <strong>user_id=928173</strong> (~2.3GB), recommend salting / two-phase aggregation for COLLECT_LIST</span><button type="button" class="apply-btn" onclick="linkTo(\'view-code\',null,{taskName:\'' + name + '\',instanceId:\'' + inst + '\'},true)" style="background:#E6F7FF;border-color:#91D5FF;color:#1890FF;">View Code</button></div>' +
+'<div class="rc-sug-item"><span>Hot key: <strong>user_id=928173</strong> (~2.3GB), recommend salting / two-phase aggregation for COLLECT_LIST</span><button type="button" class="apply-btn" onclick="linkTo(\'view-code\',null,{taskName:\'' + name + '\',instanceId:\'' + inst + '\'},true)" style="background:#FAFBFC;border-color:#D9DDE3;color:#1890FF;">View Code</button></div>' +
 '</div></div></div>' +
 '<div class="resp-section" style="background:#fff;"><div class="rc-label" style="margin-bottom:6px;">Optimized SQL Example (salting)</div>' +
 '<div class="code-block"><div class="cb-header"><span>Spark SQL</span><div class="cb-actions"><button type="button" class="cb-act" onclick="copyCode(this)">Copy</button><button type="button" class="cb-act" onclick="insertCode(this)">Insert to Editor</button></div></div>' +
@@ -1984,7 +1984,7 @@ function genDiagnosisSlow(ctx) {
 '<div class="rc-section"><div class="rc-label">Runtime Comparison</div><div class="rc-value">Currently running <strong>77min</strong>, 7-day average <strong>32min</strong> (<strong style="color:#FF4D4F">+140%</strong> slower)</div></div>' +
 '<div class="rc-section" style="margin-bottom:0;"><div class="rc-label">Bottleneck</div><div class="rc-value">Shuffle Write grew from 4.2GB to <strong>7.8GB</strong> (+86%), data volume growth ~35%, but Shuffle growth far exceeds data growth, possibly due to insufficient partitions causing spill. No OOM or errors detected.</div></div>' +
 '</div></div>' +
-'<div class="r-card" style="margin-top:0;border-top:1px solid #F0F0F0;"><div class="r-card-h"><div class="r-card-ico" style="background:#E6F7FF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg></div><span class="r-card-t">Optimization Suggestions</span></div><div class="r-card-b"><div class="rc-suggestions">' +
+'<div class="r-card" style="margin-top:0;border-top:1px solid #F0F0F0;"><div class="r-card-h"><div class="r-card-ico" style="background:#F0F2F5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg></div><span class="r-card-t">Optimization Suggestions</span></div><div class="r-card-b"><div class="rc-suggestions">' +
 '<div class="rc-sug-item"><span><code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">spark.sql.shuffle.partitions</code> Current 200 → Recommended <strong>400</strong></span><button type="button" class="apply-btn" onclick="applyFix(this,\'spark.sql.shuffle.partitions\',\'400\')">Apply</button></div>' +
 '<div class="rc-sug-item"><span>Check broadcast threshold <code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">autoBroadcastJoinThreshold</code>; small table JOINs can use broadcast</span></div>' +
 '</div></div></div>' +
@@ -2025,7 +2025,7 @@ function genDiagnosisWaiting(ctx) {
 '<div class="r-card"><div class="r-card-h"><div class="r-card-ico" style="background:#FFF7E6"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D46B08" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><span class="r-card-t">Wait Reason</span></div><div class="r-card-b">' +
 '<div class="rc-value">' + reason + '</div>' +
 '</div></div>' +
-'<div class="r-card" style="margin-top:0;border-top:1px solid #F0F0F0;"><div class="r-card-h"><div class="r-card-ico" style="background:#E6F7FF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg></div><span class="r-card-t">Suggestions</span></div><div class="r-card-b"><div class="rc-suggestions">' + suggestion +
+'<div class="r-card" style="margin-top:0;border-top:1px solid #F0F0F0;"><div class="r-card-h"><div class="r-card-ico" style="background:#F0F2F5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg></div><span class="r-card-t">Suggestions</span></div><div class="r-card-b"><div class="rc-suggestions">' + suggestion +
 '</div></div></div>' +
 '<div class="resp-section" style="border-bottom:none;"><div class="link-btns">' +
 '<button type="button" class="link-btn" onclick="simulateSendWithText(\'Diagnose instance ' + upstreamInst + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>Diagnose Upstream Instance</button>' +
@@ -2239,7 +2239,7 @@ function genSearchInstances(filter) {
   }
   var rows = results.map(function(r) {
     var bc = r.inst.status === 'Failed' ? 'failed' : r.inst.status === 'Running' ? 'running' : r.inst.status === 'Waiting' ? 'waiting' : 'success';
-    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:4px;border-radius:8px;cursor:pointer;background:linear-gradient(135deg,#FAFAFA,#F8F8FC);border:1px solid #F0F0F0;transition:.15s;" onmouseover="this.style.borderColor=\'#D3ADF7\';this.style.background=\'#FAFAFF\'" onmouseout="this.style.borderColor=\'#F0F0F0\';this.style.background=\'linear-gradient(135deg,#FAFAFA,#F8F8FC)\'" onclick="simulateSendWithText(\'Diagnose instance ' + r.id + '\')">' +
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:4px;border-radius:8px;cursor:pointer;background:linear-gradient(135deg,#FAFAFA,#F8F8FC);border:1px solid #F0F0F0;transition:.15s;" onmouseover="this.style.borderColor=\'#C9CDD4\';this.style.background=\'#F5F7FA\'" onmouseout="this.style.borderColor=\'#F0F0F0\';this.style.background=\'linear-gradient(135deg,#FAFAFA,#F8F8FC)\'" onclick="simulateSendWithText(\'Diagnose instance ' + r.id + '\')">' +
       '<span class="status-badge ' + bc + '" style="font-size:11px;flex-shrink:0;white-space:nowrap;">' + r.inst.status + '</span>' +
       '<div style="flex:1;min-width:0;overflow:hidden;">' +
       '<div style="color:#1890FF;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + r.inst.task + '</div>' +
@@ -2280,7 +2280,7 @@ function genSearchTasks(filter) {
       var bc = latestInst[1].status === 'Failed' ? 'failed' : latestInst[1].status === 'Running' ? 'running' : latestInst[1].status === 'Waiting' ? 'waiting' : 'success';
       statusSummary = '<span class="status-badge ' + bc + '" style="font-size:10px;padding:0 6px;">' + latestInst[1].status + '</span>';
     }
-    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:4px;border-radius:8px;cursor:pointer;background:linear-gradient(135deg,#FAFAFA,#F8F8FC);border:1px solid #F0F0F0;transition:.15s;" onmouseover="this.style.borderColor=\'#D3ADF7\';this.style.background=\'#FAFAFF\'" onmouseout="this.style.borderColor=\'#F0F0F0\';this.style.background=\'linear-gradient(135deg,#FAFAFA,#F8F8FC)\'" onclick="navToTask(\'' + r.name + '\')">' +
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:4px;border-radius:8px;cursor:pointer;background:linear-gradient(135deg,#FAFAFA,#F8F8FC);border:1px solid #F0F0F0;transition:.15s;" onmouseover="this.style.borderColor=\'#C9CDD4\';this.style.background=\'#F5F7FA\'" onmouseout="this.style.borderColor=\'#F0F0F0\';this.style.background=\'linear-gradient(135deg,#FAFAFA,#F8F8FC)\'" onclick="navToTask(\'' + r.name + '\')">' +
       '<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;background:' + (priNum >= 4 ? '#FFF1F0' : priNum >= 3 ? '#FFF7E6' : '#F5F5F5') + ';color:' + priColor + ';font-weight:700;font-size:12px;flex-shrink:0;">P' + priNum + '</span>' +
       '<span style="flex:1;min-width:0;">' +
       '<span style="color:#1890FF;font-size:12px;font-weight:500;">' + r.name + '</span>' +
@@ -2309,7 +2309,7 @@ function genOperationConfirm(intent, ctx) {
   const taskCode = (TASKS[name] || TASKS.update_table).code;
   const uid = 'dyn-' + Date.now();
   var warnSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>';
-  var rerunIco = '<div class="r-card-ico" style="background:#F9F0FF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></div>';
+  var rerunIco = '<div class="r-card-ico" style="background:#F0F2F5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></div>';
   if (intent.type === 'op_rerun') {
     var taskInstances = Object.entries(INSTANCES).filter(function(e) { return e[1].task === name; });
     var instRow = '';
@@ -2397,7 +2397,7 @@ summaryRow +
       bfDownHtml = '<span style="color:#8C8C8C;font-size:11px;">No downstream tasks</span>';
     }
     var bfPauseHtml = '<div class="ac-row" id="' + uid + '-bf-pause-row" style="align-items:flex-start;display:none;"><span class="ac-key">Pause and Resume</span><span class="ac-val-edit" style="flex-direction:column;align-items:stretch;"><table class="pr-table" id="' + uid + '-bf-pr-table"><thead><tr><th>Pause at</th><th>Resume at</th><th>Status</th><th></th></tr></thead><tbody><tr><td><input class="ac-input" type="time" value="23:30" style="width:90px;"/></td><td><input class="ac-input" type="time" value="00:30" style="width:90px;"/></td><td><label class="toggle-switch"><input type="checkbox" checked/><span class="toggle-slider"></span></label></td><td><span class="pr-delete" onclick="deletePauseRow(this)">Delete</span></td></tr></tbody></table><div class="ac-add-btn" style="text-align:center;margin-top:4px;" onclick="addBfPauseRow(\'' + uid + '\')">+ Add Schedule</div></span></div>';
-    return '<div class="msg-bubble">Please confirm the following backfill:</div><div class="r-card" id="' + uid + '-card" data-op="backfill"><div class="r-card-h"><div class="r-card-ico" style="background:#E6F7FF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div><span class="r-card-t">Operation Confirmation: Backfill <span style="font-size:10px;background:#E6F7FF;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
+    return '<div class="msg-bubble">Please confirm the following backfill:</div><div class="r-card" id="' + uid + '-card" data-op="backfill"><div class="r-card-h"><div class="r-card-ico" style="background:#F0F2F5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div><span class="r-card-t">Operation Confirmation: Backfill <span style="font-size:10px;background:#F0F2F5;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
 '<div class="ac-row"><span class="ac-key">Event Name</span><span class="ac-val-edit"><input class="ac-input" type="text" value="' + bfEventName + '" style="font-size:11px;min-width:200px;"/></span></div>' +
@@ -2442,7 +2442,7 @@ bfPauseHtml +
       }
       downHtml += '</span></div>';
     }
-    return '<div class="msg-bubble">Please confirm the following freeze:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#E6F7FF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/></svg></div><span class="r-card-t">Operation Confirmation: Freeze task <span style="font-size:10px;background:#E6F7FF;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
+    return '<div class="msg-bubble">Please confirm the following freeze:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F0F2F5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/></svg></div><span class="r-card-t">Operation Confirmation: Freeze task <span style="font-size:10px;background:#F0F2F5;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Freeze task (Freeze)</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
@@ -2462,10 +2462,10 @@ downHtml +
       priOptions += '<option value="' + pi + '"' + sel + '>' + pi + ' - ' + PRI_LABEL[pk] + (pi === curNum ? ' (current)' : '') + '</option>';
     }
     return '<div class="msg-bubble">Task <strong>' + name + '</strong> current priority is <strong>' + curNum + '</strong> (' + curLabel + '). Please select a new priority:</div>' +
-    '<div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F9F0FF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2"><path d="M12 20V4M5 11l7-7 7 7"/></svg></div><span class="r-card-t">Operation Confirmation: Adjust Priority <span style="font-size:10px;background:#E6F7FF;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
+    '<div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F0F2F5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 20V4M5 11l7-7 7 7"/></svg></div><span class="r-card-t">Operation Confirmation: Adjust Priority <span style="font-size:10px;background:#F0F2F5;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
     '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
     '<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
-    '<div class="ac-row"><span class="ac-key">Current Priority</span><span class="ac-val"><span style="display:inline-flex;align-items:center;gap:4px;"><span style="background:#F9F0FF;color:#722ED1;padding:1px 8px;border-radius:3px;font-weight:600;">' + curNum + '</span><span style="color:#8C8C8C;">(' + curLabel + ')</span></span></span></div>' +
+    '<div class="ac-row"><span class="ac-key">Current Priority</span><span class="ac-val"><span style="display:inline-flex;align-items:center;gap:4px;"><span style="background:#F0F2F5;color:#1890FF;padding:1px 8px;border-radius:3px;font-weight:600;">' + curNum + '</span><span style="color:#8C8C8C;">(' + curLabel + ')</span></span></span></div>' +
     '<div class="ac-row"><span class="ac-key">Select New Priority</span><span class="ac-val"><select class="policy-select" id="' + uid + '-pri-select" style="color:#333;min-width:180px;">' + priOptions + '</select></span></div>' +
     '</div><div class="ac-warning" id="' + uid + '-warning"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>Priority will be changed immediately after confirmation. Priority range is 1–5; higher numbers mean higher priority. Raising priority helps this task obtain scheduling resources sooner.</div>' +
     '<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmPriority(\'' + uid + '\',\'' + name + '\')">Confirm</button></div></div></div>';
@@ -2553,7 +2553,7 @@ msDownHint +
     var tnWarnMsg = tnHasRun
       ? 'This business date instance has already been executed (status: <strong>' + tnStatus + '</strong>). Trigger Now will <strong>re-execute</strong> this instance immediately with the latest code version.'
       : 'This will <strong>immediately execute</strong> the instance for today\'s business date. The instance will start without waiting for its scheduled time.';
-    return '<div class="msg-bubble">Please confirm the following trigger now:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F9F0FF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div><span class="r-card-t">Operation Confirmation: Trigger Now <span style="font-size:10px;background:#E6F7FF;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
+    return '<div class="msg-bubble">Please confirm the following trigger now:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F0F2F5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div><span class="r-card-t">Operation Confirmation: Trigger Now <span style="font-size:10px;background:#F0F2F5;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Trigger Now</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
@@ -2563,7 +2563,7 @@ tnScheduleOption +
 '</div><div class="ac-warning" id="' + uid + '-warning">' + warnSvg + tnWarnMsg + '</div>' +
 '<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynGeneric(\'' + uid + '\',\'Trigger Now\',\'' + name + '\',\'\',\'task\')">Confirm</button></div></div></div>';
   }
-  var levelTag = (intent.level === 'instance') ? '<span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span>' : '<span style="font-size:10px;background:#E6F7FF;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span>';
+  var levelTag = (intent.level === 'instance') ? '<span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span>' : '<span style="font-size:10px;background:#F0F2F5;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span>';
   return '<div class="msg-bubble">Please confirm the following ' + opn + ':</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><span class="r-card-t">Operation Confirmation: ' + opn + ' ' + levelTag + '</span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">' + opn + '</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
@@ -2586,13 +2586,13 @@ function genCapabilityIntro() {
       '<div class="cap-header-text"><div class="cap-header-title">Intelligent Ops Agent</div><div class="cap-header-sub">Here\'s what I can help you with</div></div>' +
     '</div>' +
     '<div class="cap-grid">' +
-      '<div class="cap-item"><div class="cap-item-icon" style="background:linear-gradient(135deg,#F9F0FF,#F0E6FF);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div><div class="cap-item-body"><div class="cap-item-title">Anomaly Detection</div><div class="cap-item-desc">Scan today\'s runs, surface failed / slow / waiting instances</div></div></div>' +
+      '<div class="cap-item"><div class="cap-item-icon" style="background:linear-gradient(135deg,#F5F7FA,#ECEFF1);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div><div class="cap-item-body"><div class="cap-item-title">Anomaly Detection</div><div class="cap-item-desc">Scan today\'s runs, surface failed / slow / waiting instances</div></div></div>' +
       '<div class="cap-item"><div class="cap-item-icon" style="background:linear-gradient(135deg,#FFF1F0,#FFE8E6);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF4D4F" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg></div><div class="cap-item-body"><div class="cap-item-title">Root Cause Diagnosis</div><div class="cap-item-desc">Pinpoint failure causes, analyze resource bottlenecks, suggest fixes</div></div></div>' +
-      '<div class="cap-item"><div class="cap-item-icon" style="background:linear-gradient(135deg,#E6F7FF,#D6EFFF);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div><div class="cap-item-body"><div class="cap-item-title">Information Query</div><div class="cap-item-desc">Dependencies, code logic, logs, lineage, priority &mdash; ask in plain language</div></div></div>' +
+      '<div class="cap-item"><div class="cap-item-icon" style="background:linear-gradient(135deg,#F5F7FA,#E8ECF0);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div><div class="cap-item-body"><div class="cap-item-title">Information Query</div><div class="cap-item-desc">Dependencies, code logic, logs, lineage, priority &mdash; ask in plain language</div></div></div>' +
       '<div class="cap-item"><div class="cap-item-icon" style="background:linear-gradient(135deg,#F6FFED,#E6FFD6);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#52C41A" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></div><div class="cap-item-body"><div class="cap-item-title">Ops Execution</div><div class="cap-item-desc">Rerun, Kill, Backfill, Freeze, Adjust Priority &mdash; always with confirmation</div></div></div>' +
     '</div>' +
     '<div class="cap-examples">' +
-      '<div class="cap-ex-title"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Try asking</div>' +
+      '<div class="cap-ex-title"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Try asking</div>' +
       '<div class="cap-ex-row">' +
         '<span class="cap-ex-chip" onclick="fillInput(\'Diagnose instance di_scheduler.studio_6801187_20260403_DAY_2\')">Diagnose a failed instance</span>' +
         '<span class="cap-ex-chip" onclick="fillInput(\'Show dependencies for task update_table\')">Show task dependencies</span>' +
@@ -2631,41 +2631,51 @@ function buildAnomalyQuestion(id, inst) {
 }
 
 function buildOverviewGrid(stats) {
+  var ovSvg = {
+    total: '<svg class="ov-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" d="M4 5.5h6v6H4v-6zm10 0h6v6h-6v-6zM4 15.5h6v6H4v-6zm10 0h6v6h-6v-6z"/></svg>',
+    success: '<svg class="ov-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.25" fill="none"/><path stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" d="M8 12.5l2.5 2.5L16 9.5"/></svg>',
+    failed: '<svg class="ov-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.25" fill="none"/><path stroke="currentColor" stroke-width="1.25" stroke-linecap="round" d="M15 9l-6 6M9 9l6 6"/></svg>',
+    running: '<svg class="ov-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-width="1.25" stroke-linecap="round" d="M7 18V11M12 18V7m5 11v-6"/></svg>',
+    waiting: '<svg class="ov-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.25" fill="none"/><path stroke="currentColor" stroke-width="1.25" stroke-linecap="round" d="M12 7v5l3.5 2"/></svg>'
+  };
   var items = [
-    { key: 'total', val: stats.total, label: 'Total', color: '#722ED1', bg: '#F9F0FF', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>' },
-    { key: 'success', val: stats.success, label: 'Success', color: '#52C41A', bg: '#F6FFED', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#52C41A" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>' },
-    { key: 'failed', val: stats.failed, label: 'Failed', color: '#FF4D4F', bg: '#FFF1F0', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF4D4F" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>' },
-    { key: 'running', val: stats.running, label: 'Running', color: '#1890FF', bg: '#E6F7FF', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>' },
-    { key: 'waiting', val: stats.waiting, label: 'Waiting', color: '#D46B08', bg: '#FFFBE6', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D46B08" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' }
+    { key: 'total', val: stats.total, label: 'Total', color: '#2463C7', wrapClass: 'ov-cell-icon--total', icon: ovSvg.total },
+    { key: 'success', val: stats.success, label: 'Success', color: '#2E8B45', wrapClass: 'ov-cell-icon--success', icon: ovSvg.success },
+    { key: 'failed', val: stats.failed, label: 'Failed', color: '#C53434', wrapClass: 'ov-cell-icon--failed', icon: ovSvg.failed },
+    { key: 'running', val: stats.running, label: 'Running', color: '#2463C7', wrapClass: 'ov-cell-icon--running', icon: ovSvg.running },
+    { key: 'waiting', val: stats.waiting, label: 'Waiting', color: '#B37400', wrapClass: 'ov-cell-icon--waiting', icon: ovSvg.waiting }
   ];
   return '<div class="ov-grid">' + items.map(function(it) {
     return '<div class="ov-cell" onclick="openAllInstances(\'' + it.key + '\')">' +
-      '<div class="ov-cell-icon" style="background:' + it.bg + ';">' + it.icon + '</div>' +
+      '<div class="ov-cell-icon ' + it.wrapClass + '">' + it.icon + '</div>' +
       '<div class="ov-cell-info"><div class="ov-cell-val" style="color:' + it.color + ';">' + it.val + '</div>' +
       '<div class="ov-cell-label">' + it.label + '</div></div></div>';
   }).join('') + '</div>';
 }
 
 function buildAnomalyList(anomalies) {
-  if (anomalies.length === 0) return '<div class="ov-no-anomaly"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#52C41A" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg> All instances running normally</div>';
+  if (anomalies.length === 0) return '<div class="ov-no-anomaly"><svg class="ov-svg ov-no-anomaly-ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="#52C41A" stroke-width="1.5" fill="none"/><path stroke="#52C41A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M8 12.5l2.5 2.5L16 9.5"/></svg> All instances running normally</div>';
   var items = anomalies.map(function(a) {
     var st = a.inst.status;
     var tagClass = st === 'Failed' ? 'st-failed' : st === 'Running' ? 'st-running' : st === 'Waiting' ? 'st-waiting' : 'st-success';
     var desc = buildAnomalyDesc(a.inst);
     var question = buildAnomalyQuestion(a.id, a.inst);
+    var taskLabel = a.inst.task || '—';
     return '<div class="ov-anomaly" onclick="simulateSendWithText(\'' + question.replace(/'/g, "\\'") + '\')">' +
       '<span class="status-tag ' + tagClass + '">' + st + '</span>' +
-      '<span class="ov-anomaly-name">' + a.inst.task + '</span>' +
-      '<span class="ov-anomaly-desc">' + desc + '</span>' +
-      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#BFBFBF" stroke-width="2" style="flex-shrink:0"><path d="M9 18l6-6-6-6"/></svg></div>';
+      '<div class="ov-anomaly-mid">' +
+      '<span class="ov-anomaly-name">' + escapeHtml(taskLabel) + '</span>' +
+      '<span class="ov-anomaly-desc">' + escapeHtml(desc) + '</span>' +
+      '</div>' +
+      '<svg class="ov-anomaly-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#BFBFBF" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>';
   }).join('');
-  return '<div class="ov-anomaly-header"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF4D4F" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg><span>Attention Required</span><span class="ov-anomaly-count">' + anomalies.length + '</span></div><div class="ov-anomaly-list">' + items + '</div>';
+  return '<div class="ov-anomaly-header"><svg class="ov-attn-ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="#FF4D4F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M12 9v4M12 17h.01"/><path stroke="#FF4D4F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><span>Attention Required</span><span class="ov-anomaly-count">' + anomalies.length + '</span></div><div class="ov-anomaly-list">' + items + '</div>';
 }
 
 function genPatrol() {
   var stats = computeOverviewStats();
   return '<div class="ov-card">' +
-    '<div class="ov-card-header"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2" stroke-linecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg><span>Today\'s Overview</span><span class="ov-date">2026-04-03</span></div>' +
+    '<div class="ov-card-header"><svg class="ov-header-ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M4 19h16M6 15l3-4 3 2 4-6 4 5"/><path stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M4 19V5"/></svg><span>Today\'s Overview</span><span class="ov-date">2026-04-03</span></div>' +
     '<div class="ov-card-body">' + buildOverviewGrid(stats) + '</div>' +
     '<div class="ov-card-body" style="padding-top:0;">' + buildAnomalyList(stats.anomalies) + '</div></div>';
 }
@@ -2965,10 +2975,10 @@ function genInfoPriority(ctx) {
   return '<div class="response-wrap"><div class="msg-bubble" style="border:none;background:transparent;">' +
     'Priority for task <strong>' + name + '</strong>:' +
     '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;">' +
-    '<span style="display:inline-flex;align-items:center;gap:6px;background:#F9F0FF;border:1px solid #D3ADF7;padding:4px 12px;border-radius:6px;">' +
-    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#722ED1" stroke-width="2"><path d="M12 20V4M5 11l7-7 7 7"/></svg>' +
-    '<span style="font-size:16px;font-weight:700;color:#722ED1;">' + curNum + '</span>' +
-    '<span style="font-size:12px;color:#722ED1;">(' + curLabel + ')</span>' +
+    '<span style="display:inline-flex;align-items:center;gap:6px;background:#F5F7FA;border:1px solid #E0E3E8;padding:4px 12px;border-radius:6px;">' +
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 20V4M5 11l7-7 7 7"/></svg>' +
+    '<span style="font-size:16px;font-weight:700;color:#1890FF;">' + curNum + '</span>' +
+    '<span style="font-size:12px;color:#1890FF;">(' + curLabel + ')</span>' +
     '</span>' +
     '<span style="font-size:11px;color:#8C8C8C;">Range: 1 (lowest) ~ 5 (highest)</span>' +
     '</div>' +
@@ -2987,74 +2997,15 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-function buildSystemPrompt(userText) {
-  var mentionedTasks = [];
-  Object.keys(TASKS).forEach(function(n) {
-    if (userText && userText.indexOf(n) >= 0) mentionedTasks.push(n);
-  });
-  Object.entries(INSTANCES).forEach(function(e) {
-    if (userText && userText.indexOf(e[0]) >= 0 && mentionedTasks.indexOf(e[1].task) < 0) {
-      mentionedTasks.push(e[1].task);
-    }
-  });
-
-  var relevantTasks = mentionedTasks.length > 0 ? mentionedTasks : null;
-  if (relevantTasks) {
-    var expanded = relevantTasks.slice();
-    relevantTasks.forEach(function(t) {
-      var d = DEPS[t];
-      if (d) {
-        (d.up || []).forEach(function(u) { if (expanded.indexOf(u) < 0) expanded.push(u); });
-        (d.down || []).forEach(function(dd) { if (expanded.indexOf(dd) < 0) expanded.push(dd); });
-      }
-    });
-    relevantTasks = expanded;
-  }
-
-  var taskEntries = Object.entries(TASKS);
-  if (relevantTasks) {
-    taskEntries = taskEntries.filter(function(e) { return relevantTasks.indexOf(e[0]) >= 0; });
-  }
-
-  var taskLines = taskEntries.map(function(e) {
-    var n = e[0], t = e[1];
-    var insts = Object.entries(INSTANCES).filter(function(i) { return i[1].task === n; });
-    var instStr = insts.map(function(i) {
-      var s = i[1].status === 'Successful' ? 'OK' : i[1].status === 'Failed' ? 'FAIL' : i[1].status === 'Running' ? 'RUN' : 'WAIT';
-      return i[0].replace('di_scheduler.', '') + ':' + s + (i[1].note ? '(' + i[1].note + ')' : '');
-    }).join('; ');
-    return n + ' | ' + t.type + ' | P' + getPriorityNum(t.priority) + ' | ' + t.owner + ' | ' + (instStr || '-');
-  }).join('\n');
-
-  var depEntries = Object.entries(DEPS);
-  if (relevantTasks) {
-    depEntries = depEntries.filter(function(e) { return relevantTasks.indexOf(e[0]) >= 0; });
-  }
-  var depLines = depEntries.map(function(e) {
-    var ups = (e[1].up || []).join(',') || '-';
-    var downs = (e[1].down || []).join(',') || '-';
-    return e[0] + ' ↑' + ups + ' ↓' + downs;
-  }).join('\n');
-
-  var scopeNote = relevantTasks ? '(related tasks only)' : '(full set)';
-
-  var prompt = 'You are the intelligent operations assistant for a big data scheduling platform. Answer concisely using platform data; do not fabricate data. Respond in English; do not use markdown tables.\n\n';
-  prompt += 'Supported capabilities: run inspection, run diagnosis, information queries, operations (rerun/kill/skip dependency/mark success/backfill/freeze/unfreeze/adjust priority), task and instance search\n\n';
-  prompt += 'Task data ' + scopeNote + ' (format: task name|type|priority|owner|instances)\n' + taskLines + '\n\n';
-  prompt += 'Dependencies ' + scopeNote + '(↑ upstream ↓ downstream)\n' + depLines + '\n\n';
-  prompt += 'Priorities P1~P5; higher numbers mean higher priority.\n' +
-    'Important: You may only answer questions and provide information; you cannot perform any mutating operations. If the user requests an operation (e.g. change owner, delete task, change configuration), reply that "This operation is not supported via the AI assistant" and list the operations you do support.';
-  return prompt;
-}
-
-async function callCompassLLM(userText) {
+async function getOpenEndedFallbackResponse() {
   return {
-    content: 'This is a **static demo** — LLM-powered open-ended responses are not available in this deployment.\n\nYou can try any of these structured capabilities instead:\n- "Any anomalies in today\'s runs" — run an inspection\n- "Diagnose instance di_scheduler.studio_6801187_20260403_DAY_2" — failure diagnosis\n- "Show dependencies for task update_table" — dependency query\n- "Explain code logic of update_table" — code explanation\n- "Rerun instance ..." / "Backfill task ..." — operations\n- "What capabilities do you have" — capability overview'
+    content: 'This is a **static demo** with predefined structured capabilities.\n\nOpen-ended free chat is not enabled in this version.\n\nYou can try any of these instead:\n- "Any anomalies in today\'s runs" — run an inspection\n- "Diagnose instance di_scheduler.studio_6801187_20260403_DAY_2" — failure diagnosis\n- "Show dependencies for task update_table" — dependency query\n- "Explain code logic of update_table" — code explanation\n- "Rerun instance ..." / "Backfill task ..." — operations\n- "What capabilities do you have" — capability overview'
   };
 }
 
 function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function renderMarkdown(raw) {
@@ -3228,7 +3179,7 @@ function renderFollowUpHtml(suggestions) {
   return '<div class="follow-up-wrap"><div class="follow-up-title"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>You might also want to ask</div>' + items + '</div>';
 }
 
-function genLLMFollowUps(userText, ctx) {
+function genOpenEndedFollowUps(userText, ctx) {
   var suggestions = [];
   var name = ctx.taskName || '';
   var inst = ctx.instanceId || '';
@@ -3256,7 +3207,7 @@ function appendAgentMsg(conv, innerHtml, inputTokens, outputTokens, followUpHtml
   if (followUpHtml) bodyHtml += followUpHtml;
   if (inputTokens !== undefined && inputTokens !== null && outputTokens !== undefined && outputTokens !== null) {
     var tot = inputTokens + outputTokens;
-    bodyHtml += '<div class="token-info">⚡ ' + tot.toLocaleString() + ' tokens (input: ' + inputTokens.toLocaleString() + ' / output: ' + outputTokens.toLocaleString() + ') · compass-max</div>';
+    bodyHtml += '<div class="token-info">⚡ ' + tot.toLocaleString() + ' tokens (input: ' + inputTokens.toLocaleString() + ' / output: ' + outputTokens.toLocaleString() + ')</div>';
   }
   bodyHtml += getMsgActionsHtml();
   div.innerHTML = '<div class="msg-av agent">' + AGENT_SVG + '</div><div class="msg-body">' + bodyHtml + '</div>';
@@ -3425,13 +3376,13 @@ async function simulateSendWithText(text) {
     SessionManager.addMessage(activeConvId, 'agent', response || '', _agentHtml);
   } else {
     const thinkEl = appendThinking(conv);
-    const llmResult = await callCompassLLM(text);
+    const llmResult = await getOpenEndedFallbackResponse();
     thinkEl.remove();
     if (llmResult.content) {
       const html = '<div class="response-wrap"><div class="msg-bubble" style="border:none;">' + renderMarkdown(llmResult.content) + '</div></div>';
       var promptTokens = llmResult.usage ? llmResult.usage.prompt_tokens : null;
       var completionTokens = llmResult.usage ? llmResult.usage.completion_tokens : null;
-      var llmFollowUps = genLLMFollowUps(text, currentContext);
+      var llmFollowUps = genOpenEndedFollowUps(text, currentContext);
       var llmFollowUpHtml = renderFollowUpHtml(llmFollowUps);
       var _agentHtml2 = appendAgentMsg(conv, html, promptTokens, completionTokens, llmFollowUpHtml);
       SessionManager.addMessage(activeConvId, 'agent', llmResult.content || '', _agentHtml2);
