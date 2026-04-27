@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Intelligent Ops Agent v3 — Cursor Paradigm</title>
+<title>Scheduler Agent v3 — Cursor Paradigm</title>
 <link rel="stylesheet" href="ops-agent.css?v=20260423v4">
 <style>
 /* Inline overrides only — main styles in ops-agent.css */
@@ -856,7 +856,7 @@
     <div class="ap-header-full">
       <div class="ap-h-left">
         <div class="ap-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5z"/><path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" opacity=".8"/><path d="M6 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" opacity=".5"/></svg></div>
-        <div><div class="ap-title">Intelligent Ops Agent</div><div class="ap-subtitle">Scheduler AI Ops Agent</div></div>
+        <div><div class="ap-title">Scheduler Agent</div><div class="ap-subtitle">Scheduler AI Ops Agent</div></div>
       </div>
       <div class="ap-h-actions">
         <button type="button" class="dock-btn" id="dockBtn" title="Float / Dock" onclick="toggleFloat()">⇄ Float</button>
@@ -872,6 +872,7 @@
         <button type="button" class="stb-btn" title="Chat History" onclick="toggleSessionList()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></button>
       </div>
     </div>
+    <div class="shared-view-bar" id="sharedViewBar" style="display:none"></div>
   </div>
   <div class="stb-more-dropdown" id="stbMoreDropdown"></div>
 
@@ -881,6 +882,35 @@
     <div class="hd-footer"><button class="sl-clear-btn" type="button" onclick="clearAllSessions()">Clear All</button></div>
   </div>
   <div class="hd-backdrop" id="hdBackdrop" onclick="closeSessionList()"></div>
+  <div class="share-modal-backdrop" id="shareModalBackdrop" style="display:none" onclick="closeShareDialog()"></div>
+  <div class="share-modal" id="shareModal" style="display:none">
+    <div class="share-modal-header">
+      <div>
+        <div class="share-modal-title">Share Chat</div>
+        <div class="share-modal-subtitle">Generate a full-screen shared view for this session</div>
+      </div>
+      <button type="button" class="share-modal-close" onclick="closeShareDialog()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="share-modal-body">
+      <div class="share-modal-meta">
+        <div class="share-modal-meta-label">Session</div>
+        <div class="share-modal-meta-value" id="shareModalSessionTitle">-</div>
+      </div>
+      <div class="share-modal-meta">
+        <div class="share-modal-meta-label">Preview</div>
+        <div class="share-modal-meta-value" id="shareModalSessionMeta">-</div>
+      </div>
+      <div class="share-modal-field">
+        <label class="share-modal-label" for="shareModalLink">Shared link</label>
+        <textarea id="shareModalLink" class="share-modal-textarea" readonly></textarea>
+      </div>
+      <div class="share-modal-note">Anyone opening this link will see a full-screen shared conversation view without the left-side Scheduler workspace.</div>
+    </div>
+    <div class="share-modal-actions">
+      <button type="button" class="share-modal-btn" onclick="copyShareLink()">Copy Link</button>
+      <button type="button" class="share-modal-btn primary" onclick="openSharePreview()">Open Shared View</button>
+    </div>
+  </div>
 
   <div class="conv-container active" id="conv-welcome"></div>
 

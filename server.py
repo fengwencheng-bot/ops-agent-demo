@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-智能运维 Agent 静态演示服务器
+Scheduler Agent 静态演示服务器
 - 提供静态文件服务（HTML mockup）
 - 不包含任何外部模型或 API 代理能力
 - 无需安装第三方依赖，仅使用 Python 标准库
@@ -67,7 +67,7 @@ def main():
 
     print(f"""
 ╔══════════════════════════════════════════════╗
-║  智能运维 Agent 服务已启动                     ║
+║  Scheduler Agent 服务已启动                   ║
 ║  地址: http://localhost:{PORT}                  ║
 ║  模式: Static Demo                            ║
 ║  按 Ctrl+C 停止                               ║

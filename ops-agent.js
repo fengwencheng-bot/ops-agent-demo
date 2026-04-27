@@ -309,7 +309,30 @@ const INSTANCE_LOGS = {
 let conversationStep = 0;
 let navHistory = ['view-tasklist'];
 let isFullscreen = false;
-let currentContext = { taskName: null, taskCode: null, instanceId: null };
+function createEmptyContext() {
+  return {
+    taskName: null,
+    taskCode: null,
+    instanceId: null,
+    skipDependency: {
+      blockerTaskName: null,
+      blockerInstanceId: null,
+      blockerStatus: null
+    }
+  };
+}
+
+function normalizeContext(ctx) {
+  var base = createEmptyContext();
+  if (!ctx) return base;
+  base.taskName = ctx.taskName || null;
+  base.taskCode = ctx.taskCode || null;
+  base.instanceId = ctx.instanceId || null;
+  base.skipDependency = Object.assign({}, base.skipDependency, ctx.skipDependency || {});
+  return base;
+}
+
+let currentContext = createEmptyContext();
 let inputHistory = [];
 let inputHistoryIdx = -1;
 let sessionSeq = 0;
@@ -319,6 +342,8 @@ const SESSION_MAX = 100;
 const SESSION_EXPIRE_DAYS = 30;
 const SESSION_AUTO_DELETE_DAYS = 90;
 const SESSION_PRESET_IDS = ['conv-welcome', 'conv-failure', 'conv-info', 'conv-backfill', 'conv-large-dep'];
+const SESSION_SHARE_VERSION = 1;
+var currentShareDialog = { sessionId: null, url: '' };
 
 const SessionManager = {
   data: { version: 1, activeSessionId: null, sessions: [] },
@@ -339,11 +364,11 @@ const SessionManager = {
   ensurePresetSessions() {
     var base = Date.now();
     var presets = [
-      { id: 'conv-welcome', title: 'New Chat', icon: 'general', autoTitle: true, relMs: 0, context: { taskName: null, taskCode: null, instanceId: null } },
-      { id: 'conv-failure', title: 'Instance Failure · update_table', icon: 'diagnosis', autoTitle: false, relMs: -3600000, context: { taskName: 'update_table', taskCode: null, instanceId: 'di_scheduler.studio_6801187_20260403_DAY_2' } },
-      { id: 'conv-info', title: 'Info Query · update_table', icon: 'query', autoTitle: false, relMs: -7200000, context: { taskName: 'update_table', taskCode: null, instanceId: null } },
-      { id: 'conv-backfill', title: 'Backfill · update_table', icon: 'operation', autoTitle: false, relMs: -86400000, context: { taskName: 'update_table', taskCode: 'di_scheduler.studio_6801187', instanceId: null } },
-      { id: 'conv-large-dep', title: 'Deps · etl_data_warehouse', icon: 'query', autoTitle: false, relMs: -5400000, context: { taskName: 'etl_data_warehouse', taskCode: 'di_scheduler.studio_7700001', instanceId: null } }
+      { id: 'conv-welcome', title: 'New Chat', icon: 'general', autoTitle: true, relMs: 0, context: createEmptyContext() },
+      { id: 'conv-failure', title: 'Instance Failure · update_table', icon: 'diagnosis', autoTitle: false, relMs: -3600000, context: normalizeContext({ taskName: 'update_table', taskCode: null, instanceId: 'di_scheduler.studio_6801187_20260403_DAY_2' }) },
+      { id: 'conv-info', title: 'Info Query · update_table', icon: 'query', autoTitle: false, relMs: -7200000, context: normalizeContext({ taskName: 'update_table', taskCode: null, instanceId: null }) },
+      { id: 'conv-backfill', title: 'Backfill · update_table', icon: 'operation', autoTitle: false, relMs: -86400000, context: normalizeContext({ taskName: 'update_table', taskCode: 'di_scheduler.studio_6801187', instanceId: null }) },
+      { id: 'conv-large-dep', title: 'Deps · etl_data_warehouse', icon: 'query', autoTitle: false, relMs: -5400000, context: normalizeContext({ taskName: 'etl_data_warehouse', taskCode: 'di_scheduler.studio_7700001', instanceId: null }) }
     ];
     for (var i = 0; i < presets.length; i++) {
       var p = presets[i];
@@ -357,7 +382,7 @@ const SessionManager = {
         createdAt: t,
         updatedAt: t,
         pinned: false,
-        context: p.context,
+        context: normalizeContext(p.context),
         messages: [],
         lastPreview: ''
       });
@@ -378,7 +403,7 @@ const SessionManager = {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       pinned: false,
-      context: context || { taskName: null, taskCode: null, instanceId: null },
+      context: normalizeContext(context),
       messages: [],
       lastPreview: ''
     };
@@ -541,6 +566,94 @@ function statusBadgeClass(s) {
   if (s === 'Running') return 'running';
   if (s === 'Waiting') return 'waiting';
   return 'success';
+}
+
+function getTaskInstances(taskName) {
+  return Object.entries(INSTANCES).filter(function(e) { return e[1].task === taskName; });
+}
+
+function getUnresolvedUpstreamCandidates(taskName) {
+  var dep = DEPS[taskName] || { up: [], down: [] };
+  return dep.up.map(function(upTask) {
+    var upInst = getTaskInstances(upTask).find(function(e) { return e[1].status !== 'Successful'; });
+    if (!upInst) return null;
+    return {
+      taskName: upTask,
+      instanceId: upInst[0],
+      status: upInst[1].status || 'Unknown'
+    };
+  }).filter(Boolean);
+}
+
+function getSkipDependencyRequestState(text, ctx) {
+  var normalized = (text || '').replace(/\./g, '_');
+  var candidates = getUnresolvedUpstreamCandidates(ctx.taskName || '');
+  var explicitAll = /skip\s+all|all\s+dependenc|全部.*依赖|所有.*依赖|全部.*上游|所有.*上游/i.test(text || '');
+  var explicitInstance = null;
+  for (var i = 0; i < candidates.length; i++) {
+    if ((text || '').indexOf(candidates[i].instanceId) >= 0) {
+      explicitInstance = candidates[i];
+      break;
+    }
+  }
+  var explicitTask = null;
+  if (!explicitInstance) {
+    for (var j = 0; j < candidates.length; j++) {
+      if (normalized.indexOf(candidates[j].taskName) >= 0 || (text || '').indexOf(candidates[j].taskName) >= 0) {
+        explicitTask = candidates[j];
+        break;
+      }
+    }
+  }
+  var blocker = ctx.skipDependency || {};
+  var blockerCandidate = candidates.find(function(c) {
+    return c.taskName === blocker.blockerTaskName || c.instanceId === blocker.blockerInstanceId;
+  }) || null;
+  var preselectedTargets = [];
+  var recommendedTarget = null;
+  if (explicitAll) {
+    preselectedTargets = candidates.map(function(c) { return c.taskName; });
+  } else if (explicitInstance || explicitTask) {
+    recommendedTarget = explicitInstance || explicitTask;
+    preselectedTargets = recommendedTarget ? [recommendedTarget.taskName] : [];
+  } else if (blockerCandidate) {
+    recommendedTarget = blockerCandidate;
+    preselectedTargets = [blockerCandidate.taskName];
+  } else if (candidates.length === 1) {
+    recommendedTarget = candidates[0];
+    preselectedTargets = [candidates[0].taskName];
+  }
+  if (recommendedTarget) {
+    candidates = [recommendedTarget].concat(candidates.filter(function(c) { return c.taskName !== recommendedTarget.taskName; }));
+  }
+  return {
+    candidates: candidates,
+    preselectedTargets: preselectedTargets,
+    recommendedTarget: recommendedTarget,
+    explicitAll: explicitAll
+  };
+}
+
+function renderSkipDependencyTarget(target, options) {
+  if (!target) return '';
+  var opts = options || {};
+  var checkboxId = opts.checkboxId || '';
+  var checked = opts.checked ? ' checked' : '';
+  var recommendedBadge = opts.recommended ? '<span class="skip-target-reco">Recommended</span>' : '';
+  var checkboxHtml = checkboxId ? '<input class="skip-target-checkbox" type="checkbox" id="' + checkboxId + '" value="' + target.taskName + '"' + checked + ' onchange="syncSkipDependencySelectionState(\'' + opts.uid + '\')"/>' : '';
+  return '<div class="skip-target-item">' +
+    '<label class="skip-target-row" for="' + checkboxId + '">' +
+    checkboxHtml +
+    '<div class="skip-target-main">' +
+    '<div class="skip-target-top">' +
+    '<span class="skip-target-name" onclick="navToTask(\'' + target.taskName + '\')">' + target.taskName + '</span>' +
+    recommendedBadge +
+    '<span class="status-badge ' + statusBadgeClass(target.status) + '" style="font-size:10px;padding:0 5px;">' + target.status + '</span>' +
+    '</div>' +
+    (target.instanceId ? '<div class="skip-target-inst">' + target.instanceId + '</div>' : '') +
+    '</div>' +
+    '</label>' +
+    '</div>';
 }
 
 function switchView(viewId) {
@@ -1301,8 +1414,10 @@ function renderSessionTabs() {
     var isActive = s.id === activeId;
     var title = s.title || 'New Chat';
     if (title.length > 18) title = title.substring(0, 16) + '...';
+    var shareIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>';
     html += '<div class="stb-tab' + (isActive ? ' active' : '') + '" data-session-id="' + s.id + '" onclick="handleTabClick(event,\'' + s.id + '\',this)" ondblclick="event.stopPropagation();event.preventDefault();startTabRename(\'' + s.id + '\',this)" title="' + (s.title || 'New Chat') + '">' +
       '<span class="stb-tab-title">' + title + '</span>' +
+      '<span class="stb-tab-share" title="Share Chat" onclick="event.stopPropagation();openShareDialog(\'' + s.id + '\')">' + shareIcon + '</span>' +
       '<span class="stb-tab-close" onclick="event.stopPropagation();closeTab(\'' + s.id + '\')">✕</span>' +
       '</div>';
   });
@@ -1448,6 +1563,263 @@ function filterSessions(query) {
   renderSessionList(query);
 }
 
+function encodeSharePayload(payload) {
+  var json = JSON.stringify(payload);
+  var bytes = new TextEncoder().encode(json);
+  var binary = '';
+  for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function decodeSharePayload(value) {
+  var normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+  while (normalized.length % 4) normalized += '=';
+  var binary = atob(normalized);
+  var bytes = new Uint8Array(binary.length);
+  for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+function isSharedMode() {
+  return document.body.classList.contains('shared-mode');
+}
+
+function sanitizeSharedHtml(html) {
+  if (!html) return '';
+  var root = document.createElement('div');
+  root.innerHTML = html;
+  root.querySelectorAll('*').forEach(function(node) {
+    for (var i = node.attributes.length - 1; i >= 0; i--) {
+      var attrName = node.attributes[i].name;
+      if (/^on/i.test(attrName)) node.removeAttribute(attrName);
+    }
+    if (node.matches('button, a, input, select, textarea')) {
+      node.classList.add('shared-static-disabled');
+      node.setAttribute('tabindex', '-1');
+      if (node.tagName === 'BUTTON' || node.tagName === 'INPUT' || node.tagName === 'SELECT' || node.tagName === 'TEXTAREA') {
+        node.setAttribute('disabled', 'disabled');
+      }
+      if (node.tagName === 'A') {
+        node.removeAttribute('href');
+        node.setAttribute('role', 'text');
+      }
+    }
+    if (node.matches('.link-btn, .apply-btn, .ac-btn, .cb-act, .follow-up-item, .msg-act, .acd-link, .policy-link, .act-link, .wc-example, .sc-chip, .dep-expand-btn, .dag-node, .dep-name, .link')) {
+      node.classList.add('shared-static-disabled');
+      node.setAttribute('tabindex', '-1');
+      node.setAttribute('aria-disabled', 'true');
+    }
+    if (node.matches('.ov-cell, .ov-anomaly')) {
+      node.classList.add('shared-overview-readonly');
+      node.setAttribute('tabindex', '-1');
+      node.setAttribute('aria-disabled', 'true');
+    }
+    if (node.matches('.ac-btns, .link-btns, .cb-actions, .follow-up-wrap, .msg-actions, .shortcut-bar')) {
+      node.classList.add('shared-static-snapshot');
+    }
+  });
+  return root.innerHTML;
+}
+
+function snapshotMessageForShare(m) {
+  return {
+    role: m.role === 'user' ? 'user' : 'agent',
+    content: m.content || '',
+    html: m.html ? sanitizeSharedHtml(m.html) : '',
+    time: m.time || new Date().toISOString()
+  };
+}
+
+function buildSharedSessionUrl(sessionId) {
+  var session = SessionManager.getSession(sessionId);
+  if (!session) return null;
+  var payload = {
+    version: SESSION_SHARE_VERSION,
+    sharedAt: new Date().toISOString(),
+    session: {
+      title: session.title || 'Shared Chat',
+      icon: session.icon || 'general',
+      context: session.context || { taskName: null, taskCode: null, instanceId: null },
+      messages: (session.messages || []).map(snapshotMessageForShare)
+    }
+  };
+  return window.location.origin + window.location.pathname + '?shared=1#share=' + encodeSharePayload(payload);
+}
+
+function importSharedSession(payload) {
+  if (!payload || payload.version !== SESSION_SHARE_VERSION || !payload.session) throw new Error('Invalid share payload');
+  var shared = payload.session;
+  var importedTitle = (shared.title || 'Shared Chat') + ' (Shared)';
+  var session = SessionManager.createSession(null, importedTitle, shared.icon || 'general', normalizeContext(shared.context));
+  SessionManager.updateSession(session.id, {
+    title: importedTitle,
+    autoTitle: false,
+    context: normalizeContext(shared.context),
+    messages: (shared.messages || []).map(function(m) {
+      return snapshotMessageForShare(m);
+    }),
+    lastPreview: (shared.messages && shared.messages.length > 0 ? String(shared.messages[shared.messages.length - 1].content || '').replace(/<[^>]*>/g, '').substring(0, 60) : '')
+  });
+  return session.id;
+}
+
+function openShareDialog(sessionId) {
+  try {
+    var url = buildSharedSessionUrl(sessionId);
+    if (!url) {
+      showToast('Unable to generate share link');
+      return;
+    }
+    var session = SessionManager.getSession(sessionId);
+    currentShareDialog.sessionId = sessionId;
+    currentShareDialog.url = url;
+    var titleEl = document.getElementById('shareModalSessionTitle');
+    var metaEl = document.getElementById('shareModalSessionMeta');
+    var linkEl = document.getElementById('shareModalLink');
+    var modal = document.getElementById('shareModal');
+    var backdrop = document.getElementById('shareModalBackdrop');
+    if (titleEl) titleEl.textContent = (session && session.title) ? session.title : 'Untitled Chat';
+    if (metaEl) {
+      var msgCount = session && session.messages ? session.messages.length : 0;
+      var updatedAt = session && session.updatedAt ? SessionManager.getRelativeTime(session.updatedAt) : 'Just now';
+      metaEl.textContent = msgCount + ' messages · Updated ' + updatedAt;
+    }
+    if (linkEl) {
+      linkEl.value = url;
+      linkEl.scrollTop = 0;
+      setTimeout(function() {
+        linkEl.focus();
+        linkEl.select();
+      }, 0);
+    }
+    if (modal) modal.style.display = 'block';
+    if (backdrop) backdrop.style.display = 'block';
+  } catch (e) {
+    showToast('Unable to generate share link');
+  }
+}
+
+function closeShareDialog() {
+  currentShareDialog.sessionId = null;
+  currentShareDialog.url = '';
+  var modal = document.getElementById('shareModal');
+  var backdrop = document.getElementById('shareModalBackdrop');
+  if (modal) modal.style.display = 'none';
+  if (backdrop) backdrop.style.display = 'none';
+}
+
+function copyShareLink() {
+  var url = currentShareDialog.url;
+  if (!url) {
+    showToast('No share link available');
+    return;
+  }
+  navigator.clipboard.writeText(url).then(function() {
+    showToast('Share link copied');
+  }).catch(function() {
+    var linkEl = document.getElementById('shareModalLink');
+    if (linkEl) {
+      linkEl.focus();
+      linkEl.select();
+    }
+    showToast('Copy failed, select the link manually');
+  });
+}
+
+function openSharePreview() {
+  if (!currentShareDialog.url) {
+    showToast('No share link available');
+    return;
+  }
+  window.open(currentShareDialog.url, '_blank');
+}
+
+function copyCurrentPageLink() {
+  var url = window.location.href;
+  navigator.clipboard.writeText(url).then(function() {
+    showToast('Share link copied');
+  }).catch(function() {
+    showToast('Unable to copy link');
+  });
+}
+
+function renderMessageNode(m) {
+  var msgDiv = document.createElement('div');
+  if (m.role === 'user') {
+    msgDiv.className = 'msg user';
+    var userActions = isSharedMode() ? '' : '<div class="msg-actions user-actions"><button class="msg-act" title="Copy" onclick="copyUserMsg(this)">' + SVG_COPY + '</button></div>';
+    msgDiv.innerHTML = '<div class="msg-av human">U</div><div class="msg-body"><div class="msg-bubble">' + escapeHtml(m.content || '') + '</div>' + userActions + '</div>';
+    return msgDiv;
+  }
+  msgDiv.className = 'msg agent';
+  if (m.html) {
+    msgDiv.innerHTML = '<div class="msg-av agent">' + AGENT_SVG + '</div><div class="msg-body">' + (isSharedMode() ? sanitizeSharedHtml(m.html) : m.html) + '</div>';
+  } else {
+    var fallbackContent = m.content || '';
+    msgDiv.innerHTML = '<div class="msg-av agent">' + AGENT_SVG + '</div><div class="msg-body"><div class="response-wrap"><div class="msg-bubble" style="border:none;padding:10px 14px;">' + escapeHtml(fallbackContent) + '</div></div>' + (isSharedMode() ? '' : getMsgActionsHtml()) + '</div>';
+  }
+  return msgDiv;
+}
+
+function renderMessagesInto(container, messages) {
+  if (!container) return;
+  container.innerHTML = '';
+  (messages || []).forEach(function(m) {
+    container.appendChild(renderMessageNode(m));
+  });
+}
+
+function enterSharedMode(payload, encodedShare) {
+  var shared = payload.session || {};
+  document.body.classList.add('shared-mode');
+  closeSessionList();
+  closeMoreTabs();
+  setAgentPanelVisible(true);
+  var panel = document.getElementById('agentPanel');
+  if (panel) {
+    panel.classList.remove('minimized');
+    panel.classList.remove('floating');
+    panel.style.left = '';
+    panel.style.top = '';
+    panel.style.right = '';
+    panel.style.width = '';
+    panel.style.minWidth = '';
+  }
+  var titleEl = document.querySelector('.ap-title');
+  if (titleEl) titleEl.textContent = 'Scheduler Agent';
+  var subtitleEl = document.querySelector('.ap-subtitle');
+  if (subtitleEl) subtitleEl.textContent = 'Scheduler AI Ops Agent';
+  var sharedBar = document.getElementById('sharedViewBar');
+  if (sharedBar) sharedBar.style.display = 'none';
+  var sessionTabs = document.getElementById('sessionTabs');
+  if (sessionTabs) {
+    var sharedTitle = shared.title || 'Shared Chat';
+    var displayTitle = sharedTitle.length > 28 ? sharedTitle.substring(0, 26) + '...' : sharedTitle;
+    sessionTabs.innerHTML = '<div class="stb-tab active" title="' + escapeHtml(sharedTitle) + '">' +
+      '<span class="stb-tab-title">' + escapeHtml(displayTitle) + '</span>' +
+      '</div>';
+  }
+  document.querySelectorAll('.conv-container').forEach(function(c) {
+    c.classList.remove('active');
+    c.style.display = 'none';
+  });
+  var inputArea = document.querySelector('.input-area');
+  var sharedConv = document.getElementById('shared-view-conv');
+  if (!sharedConv) {
+    sharedConv = document.createElement('div');
+    sharedConv.className = 'conv-container';
+    sharedConv.id = 'shared-view-conv';
+    if (inputArea && inputArea.parentNode) inputArea.parentNode.insertBefore(sharedConv, inputArea);
+  }
+  sharedConv.style.display = 'flex';
+  sharedConv.classList.add('active');
+  renderMessagesInto(sharedConv, shared.messages || []);
+  currentContext = normalizeContext(shared.context);
+  currentShareDialog.url = window.location.origin + window.location.pathname + '?shared=1#share=' + encodedShare;
+  document.title = (shared.title || 'Shared Chat') + ' - Scheduler Agent';
+  scrollActiveConv();
+}
+
 function renderSessionList(query) {
   var body = document.getElementById('sessionListBody');
   var sessions = SessionManager.search(query);
@@ -1477,11 +1849,13 @@ function renderSessionList(query) {
     var preview = s.lastPreview ? '<div class="si-preview">' + s.lastPreview.substring(0, 40) + '</div>' : '';
     var pinBtnLabel = s.pinned ? 'Unpin' : 'Pin';
     var pinBtnIcon = s.pinned ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 3l-3 3-5-1-6 6 5 5-6 6"/><path d="M14.5 9.5L9 15"/></svg>' : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5M9 11V6l-3-3h12l-3 3v5l4 4H5z"/></svg>';
+    var shareBtnIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>';
 
     html += '<div class="session-item' + (isActive ? ' active' : '') + (s.pinned ? ' pinned' : '') + '" data-session-id="' + s.id + '" data-conv-id="' + s.id + '" onclick="switchSessionById(\'' + s.id + '\')">' +
       '<div class="si-content"><span class="si-title">' + s.title + '</span>' + preview + '</div>' +
       '<div class="si-right"><span class="si-time">' + SessionManager.getRelativeTime(s.updatedAt) + '</span>' + expireIcon + '</div>' +
       '<div class="si-actions">' +
+      '<button type="button" class="si-act" title="Share" onclick="event.stopPropagation();openShareDialog(\'' + s.id + '\')">' + shareBtnIcon + '</button>' +
       '<button type="button" class="si-act" title="' + pinBtnLabel + '" onclick="event.stopPropagation();togglePinSession(\'' + s.id + '\')">' + pinBtnIcon + '</button>' +
       '<button type="button" class="si-act" title="Rename" onclick="event.stopPropagation();renameSession(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
       '<button type="button" class="si-act" title="Delete" onclick="event.stopPropagation();confirmDeleteSession(this,\'' + s.id + '\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>' +
@@ -1534,7 +1908,7 @@ function switchSessionById(sessionId) {
   conv.classList.add('active');
   var sess = SessionManager.getSession(sessionId);
   if (sess && sess.context) {
-    currentContext = Object.assign({}, sess.context);
+    currentContext = normalizeContext(sess.context);
   }
   closeSessionList();
   renderSessionTabs();
@@ -1550,7 +1924,7 @@ function buildWelcomeCardHtml() {
   return '<div class="welcome-card">' +
     '<div class="wc-hero">' +
       '<div class="wc-hero-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="#fff"><path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5z"/><path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" opacity=".8"/><path d="M6 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" opacity=".5"/></svg></div>' +
-      '<div class="wc-hero-text">Hi, I\'m your <b>Intelligent Ops Agent</b></div>' +
+      '<div class="wc-hero-text">Hi, I\'m your <b>Scheduler Agent</b></div>' +
     '</div>' +
     '<div class="wc-desc">I can identify anomalous instances, diagnose failures and pinpoint root causes, answer questions about tasks and instances in natural language, and execute ops actions like rerun or backfill on your behalf.</div>' +
     '<div class="wc-try-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Try asking me</div>' +
@@ -1574,7 +1948,7 @@ function createNewSession() {
   document.querySelectorAll('.conv-container').forEach(function (c) { c.classList.remove('active'); });
   var inputArea = document.querySelector('.input-area');
   inputArea.parentNode.insertBefore(conv, inputArea);
-  currentContext = { taskName: null, taskCode: null, instanceId: null };
+  currentContext = createEmptyContext();
   closeSessionList();
   renderSessionTabs();
   showToast('New chat created');
@@ -1841,11 +2215,17 @@ function extractEntities(text) {
   return e;
 }
 
-function resolveContext(text, entities) {
-  if (entities.taskName) currentContext.taskName = entities.taskName;
+function resolveContext(text, entities, intent) {
+  var resolvedIntent = intent || {};
+  var currentInstTask = currentContext.instanceId && INSTANCES[currentContext.instanceId] ? INSTANCES[currentContext.instanceId].task : null;
+  if (entities.taskName) {
+    var isSkipTargetTask = resolvedIntent.type === 'op_skip_dep' && currentContext.instanceId && entities.taskName !== currentInstTask;
+    if (!isSkipTargetTask) currentContext.taskName = entities.taskName;
+  }
   if (entities.instanceId) {
-    currentContext.instanceId = entities.instanceId;
-    const inf = INSTANCES[entities.instanceId];
+    var isSkipTargetInstance = resolvedIntent.type === 'op_skip_dep' && currentContext.instanceId && entities.instanceId !== currentContext.instanceId;
+    if (!isSkipTargetInstance) currentContext.instanceId = entities.instanceId;
+    const inf = INSTANCES[currentContext.instanceId || entities.instanceId];
     if (inf) currentContext.taskName = inf.task;
   }
 }
@@ -2015,6 +2395,11 @@ function genDiagnosisWaiting(ctx) {
     upstreamBadge = '<span class="status-badge running">Running</span>';
     reason = 'Upstream task <strong>' + upstreamName + '</strong> instance <code style="background:#f5f5f5;padding:2px 4px;border-radius:3px;">' + upstreamInst + '</code> still ' + upstreamBadge + ' (running 77min, usually 32min), causing current instance to wait over <strong>2h</strong>.';
   }
+  ctx.skipDependency = {
+    blockerTaskName: upstreamName,
+    blockerInstanceId: upstreamInst,
+    blockerStatus: upstreamStatus
+  };
   var suggestion = upstreamStatus === 'Failed'
     ? '<div class="rc-sug-item"><span>Fix upstream ' + upstreamName + ' issue first, then rerun; current instance will be triggered automatically</span></div>' +
       '<div class="rc-sug-item"><span>If upstream data is not required or has alternatives, you can <strong>skip dependency</strong> and execute current instance directly</span></div>'
@@ -2480,25 +2865,38 @@ downHtml +
   }
   if (intent.type === 'op_skip_dep') {
     var skipInst = inst || Object.keys(INSTANCES).find(function(k) { return INSTANCES[k].task === name; }) || '';
-    var skipDep = DEPS[name] || { up: [], down: [] };
-    var upListHtml = '';
-    if (skipDep.up.length > 0) {
-      upListHtml = '<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Upstream to skip</span><span class="ac-val" style="display:flex;flex-direction:column;gap:3px;">';
-      skipDep.up.forEach(function(u) {
-        var uInst = Object.entries(INSTANCES).find(function(e) { return e[1].task === u; });
-        var uStatus = uInst ? uInst[1].status : 'Unknown';
-        var uBc = uStatus === 'Failed' ? 'failed' : uStatus === 'Running' ? 'running' : uStatus === 'Waiting' ? 'waiting' : 'success';
-        upListHtml += '<span style="display:flex;align-items:center;gap:6px;"><span style="color:#1890FF;cursor:pointer;" onclick="navToTask(\'' + u + '\')">' + u + '</span><span class="status-badge ' + uBc + '" style="font-size:10px;padding:0 5px;">' + uStatus + '</span></span>';
-      });
-      upListHtml += '</span></div>';
+    var skipState = getSkipDependencyRequestState(intent.rawText || '', ctx);
+    var skipCandidates = skipState.candidates;
+    var skipScopeHtml = '';
+    if (skipCandidates.length > 0) {
+      var checkboxItems = skipCandidates.map(function(candidate, index) {
+        var checkboxId = uid + '-skip-item-' + index;
+        var isChecked = skipState.preselectedTargets.indexOf(candidate.taskName) >= 0;
+        var isRecommended = !!skipState.recommendedTarget && skipState.recommendedTarget.taskName === candidate.taskName;
+        return renderSkipDependencyTarget(candidate, {
+          uid: uid,
+          checkboxId: checkboxId,
+          checked: isChecked,
+          recommended: isRecommended
+        });
+      }).join('');
+      var helperText = skipState.recommendedTarget
+        ? 'The diagnosed blocking upstream is preselected. Other unresolved upstreams remain optional.'
+        : 'Select one or more unresolved upstream dependencies to bypass.';
+      var selectAllText = skipCandidates.length > 1 ? '<button type="button" class="skip-select-all" id="' + uid + '-skip-select-all" onclick="toggleAllSkipDependencies(\'' + uid + '\')">Select all unresolved upstreams</button>' : '';
+      skipScopeHtml =
+        '<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Upstreams to bypass</span><span class="ac-val skip-target-list-wrap">' +
+        '<div class="skip-target-toolbar">' + selectAllText + '<span class="ac-hint" style="white-space:normal;">' + helperText + '</span></div>' +
+        '<div class="skip-target-list" id="' + uid + '-skip-list">' + checkboxItems + '</div>' +
+        '</span></div>';
     }
     return '<div class="msg-bubble">Please confirm the following skip dependency:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#FFF7E6"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D46B08" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div><span class="r-card-t">Operation Confirmation: Skip Dependency <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Skip Dependency</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Instance Code</span><span class="ac-val" style="font-size:11px;">' + skipInst + '</span></div>' +
-upListHtml +
+skipScopeHtml +
 '</div><div class="ac-warning" id="' + uid + '-warning" style="border-color:#FFD591;">' + warnSvg + 'After skipping dependencies, this instance will no longer wait for upstream completion and will start immediately. <strong>Ensure missing upstream data will not affect the correctness of this task.</strong></div>' +
-'<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynGeneric(\'' + uid + '\',\'Skip Dependency\',\'' + name + '\',\'' + skipInst + '\')">Confirm</button></div></div></div>';
+'<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmSkipDependency(\'' + uid + '\',\'' + name + '\',\'' + skipInst + '\')">Confirm</button></div></div></div>';
   }
   if (intent.type === 'op_kill') {
     var killInst = inst || Object.keys(INSTANCES).find(function(k) { return INSTANCES[k].task === name; }) || '';
@@ -2583,7 +2981,7 @@ function genCapabilityIntro() {
   return '<div class="cap-card">' +
     '<div class="cap-header">' +
       '<div class="cap-header-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>' +
-      '<div class="cap-header-text"><div class="cap-header-title">Intelligent Ops Agent</div><div class="cap-header-sub">Here\'s what I can help you with</div></div>' +
+      '<div class="cap-header-text"><div class="cap-header-title">Scheduler Agent</div><div class="cap-header-sub">Here\'s what I can help you with</div></div>' +
     '</div>' +
     '<div class="cap-grid">' +
       '<div class="cap-item"><div class="cap-item-icon" style="background:linear-gradient(135deg,#F5F7FA,#ECEFF1);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div><div class="cap-item-body"><div class="cap-item-title">Anomaly Detection</div><div class="cap-item-desc">Scan today\'s runs, surface failed / slow / waiting instances</div></div></div>' +
@@ -2930,6 +3328,62 @@ function confirmDynDQC(uid, taskName, instId) {
   scrollActiveConv();
 }
 
+function getSelectedSkipDependencyTargets(uid) {
+  return Array.from(document.querySelectorAll('#' + uid + '-skip-list input[type="checkbox"]:checked')).map(function(el) {
+    return el.value;
+  });
+}
+
+function syncSkipDependencySelectionState(uid) {
+  var list = document.getElementById(uid + '-skip-list');
+  var selectAllBtn = document.getElementById(uid + '-skip-select-all');
+  if (!list || !selectAllBtn) return;
+  var allBoxes = Array.from(list.querySelectorAll('input[type="checkbox"]'));
+  var checkedCount = allBoxes.filter(function(el) { return el.checked; }).length;
+  selectAllBtn.textContent = checkedCount === allBoxes.length && allBoxes.length > 0
+    ? 'All unresolved upstreams selected'
+    : 'Select all unresolved upstreams';
+}
+
+function toggleAllSkipDependencies(uid) {
+  var list = document.getElementById(uid + '-skip-list');
+  if (!list) return;
+  var allBoxes = Array.from(list.querySelectorAll('input[type="checkbox"]'));
+  if (allBoxes.length === 0) return;
+  var shouldSelectAll = allBoxes.some(function(el) { return !el.checked; });
+  allBoxes.forEach(function(el) { el.checked = shouldSelectAll; });
+  syncSkipDependencySelectionState(uid);
+}
+
+function confirmSkipDependency(uid, taskName, instId) {
+  var btns = document.getElementById(uid + '-btns');
+  if (btns && btns.classList.contains('disabled')) return;
+  var candidates = getUnresolvedUpstreamCandidates(taskName);
+  var selectedTaskNames = getSelectedSkipDependencyTargets(uid);
+  if (candidates.length > 0 && selectedTaskNames.length === 0) {
+    showToast('Please select at least one upstream dependency');
+    return;
+  }
+  var targets = candidates.filter(function(c) { return selectedTaskNames.indexOf(c.taskName) >= 0; });
+  var summaryText = 'Skipped dependency';
+  if (targets.length === candidates.length && candidates.length > 1) {
+    summaryText = 'Skipped all unresolved upstream dependencies (' + targets.length + ')';
+  } else if (targets.length === 1) {
+    summaryText = 'Skipped dependency: <strong>' + targets[0].taskName + '</strong>';
+  } else if (targets.length > 1) {
+    summaryText = 'Skipped ' + targets.length + ' upstream dependencies';
+  }
+  if (btns) btns.classList.add('disabled');
+  var params = document.getElementById(uid + '-params');
+  var warning = document.getElementById(uid + '-warning');
+  if (params) params.classList.add('dimmed');
+  if (warning) warning.style.display = 'none';
+  var linkHtml = instId ? '<a class="acd-link" onclick="linkTo(\'view-detail\',null,{taskName:\'' + taskName + '\',instanceId:\'' + instId + '\'})">View Instance Details →</a>' : '';
+  if (btns) btns.innerHTML = '<div class="ac-done confirmed"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">' + summaryText + '</div></div>' + linkHtml + '</div>';
+  showToast('Submitted successfully!');
+  scrollActiveConv();
+}
+
 function confirmDynGeneric(uid, opName, taskName, instId, level) {
   const btns = document.getElementById(uid + '-btns');
   if (btns && btns.classList.contains('disabled')) return;
@@ -3251,11 +3705,12 @@ async function simulateSendWithText(text) {
   if (wc) wc.remove();
   appendUserMsg(conv, text);
   const entities = extractEntities(text);
-  resolveContext(text, entities);
+  const intent = classifyIntent(text);
+  intent.rawText = text;
+  resolveContext(text, entities, intent);
   var activeConvId = conv.id;
   SessionManager.addMessage(activeConvId, 'user', text);
-  SessionManager.updateSession(activeConvId, { context: Object.assign({}, currentContext) });
-  const intent = classifyIntent(text);
+  SessionManager.updateSession(activeConvId, { context: normalizeContext(currentContext) });
   let response = null;
   switch (intent.type) {
     case 'capability_intro': response = genCapabilityIntro(); break;
@@ -3392,6 +3847,7 @@ async function simulateSendWithText(text) {
       SessionManager.addMessage(activeConvId, 'agent', 'Sorry, unable to process.', _agentHtml3);
     }
   }
+  SessionManager.updateSession(activeConvId, { context: normalizeContext(currentContext) });
 }
 
 updateLineage('update_table');
@@ -3642,8 +4098,28 @@ renderSessionTabs();
 (function () {
   var params = new URLSearchParams(window.location.search);
   var diagnoseParam = params.get('diagnose');
+  var hash = window.location.hash || '';
+  var shareMatch = hash.match(/(?:^#|&)share=([^&]+)/);
+  var isSharedView = params.get('shared') === '1';
 
-  if (diagnoseParam) {
+  if (shareMatch && isSharedView) {
+    try {
+      enterSharedMode(decodeSharePayload(shareMatch[1]), shareMatch[1]);
+    } catch (e) {
+      showToast('Invalid shared link');
+    }
+  } else if (shareMatch) {
+    try {
+      var importedSessionId = importSharedSession(decodeSharePayload(shareMatch[1]));
+      switchSessionById(importedSessionId);
+      showToast('Shared chat imported');
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, '', window.location.pathname + window.location.search);
+      }
+    } catch (e) {
+      showToast('Invalid shared link');
+    }
+  } else if (diagnoseParam) {
     var sess = SessionManager.createSession(null, 'Diagnosis', 'diagnosis');
     var conv = document.createElement('div');
     conv.className = 'conv-container active';
