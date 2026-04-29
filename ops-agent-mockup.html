@@ -317,7 +317,7 @@
     <div class="tab-item">Gantt Chart</div>
     <div class="tab-item">Runtime Trend</div>
     <div class="tab-item">Details</div>
-    <div class="tab-item">Code</div>
+    <div class="tab-item" onclick="linkTo('view-task-code')">Code</div>
     <div class="tab-item">Output Config</div>
     <div class="tab-item">Operation Log</div>
     <div class="tab-item">Privilege</div>
@@ -388,7 +388,7 @@
     <div class="tab-item">Gantt Chart</div>
     <div class="tab-item">Runtime Trend</div>
     <div class="tab-item">Details</div>
-    <div class="tab-item">Code</div>
+    <div class="tab-item" onclick="linkTo('view-task-code')">Code</div>
     <div class="tab-item">Output Config</div>
     <div class="tab-item">Operation Log</div>
     <div class="tab-item">Privilege</div>
@@ -543,7 +543,7 @@
     <div class="tab-item">Gantt Chart</div>
     <div class="tab-item">Runtime Trend</div>
     <div class="tab-item">Details</div>
-    <div class="tab-item">Code</div>
+    <div class="tab-item" onclick="linkTo('view-task-code')">Code</div>
     <div class="tab-item">Output Config</div>
     <div class="tab-item">Operation Log</div>
     <div class="tab-item">Privilege</div>
@@ -573,6 +573,50 @@
     <button class="dag-action-btn">Unfreeze(0)</button>
     <button class="dag-action-btn">Backfill(0)</button>
     <button class="dag-action-btn">Trigger Now(0)</button>
+  </div>
+</div>
+
+<!-- VIEW: Task View - Code -->
+<div class="left-view" id="view-task-code">
+  <div class="pg-breadcrumb"><a onclick="switchView('view-tasklist')">Scheduled Tasks</a> / <strong>Task View</strong></div>
+  <div class="pg-title-row">
+    <div class="pg-title">update_table <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8C8C" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div>
+    <div class="pg-actions"><span style="font-size:12px;color:#8C8C8C;margin-right:8px;">Last updated: 2026-04-03 14:12:53</span><button class="btn-outline">Operate ▾</button><button class="btn-primary-sm">Edit (In Data Studio)</button></div>
+  </div>
+  <div class="pg-meta">
+    <span class="pg-meta-item">Source <span class="source-badge">Data Studio</span></span>
+    <span class="pg-meta-item">Task Type <span class="type-badge">Spark SQL</span></span>
+    <span class="pg-meta-item">Priority <span style="color:#333">⇌ 3</span></span>
+    <span class="pg-meta-item" style="color:#8C8C8C">Task Code <span style="color:#1890FF">di_scheduler.studio_6801187 <span style="cursor:pointer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></span></span></span>
+  </div>
+  <div class="tab-bar">
+    <div class="tab-item" onclick="switchView('view-taskview-matrix')">Matrix View</div>
+    <div class="tab-item" onclick="switchView('view-taskview-list')">List View</div>
+    <div class="tab-item" onclick="switchView('view-lineage')">Lineage</div>
+    <div class="tab-item">Gantt Chart</div>
+    <div class="tab-item">Runtime Trend</div>
+    <div class="tab-item">Details</div>
+    <div class="tab-item active">Code</div>
+    <div class="tab-item">Output Config</div>
+    <div class="tab-item">Operation Log</div>
+    <div class="tab-item">Privilege</div>
+    <div class="tab-item" onclick="switchView('view-taskview-alarm')">Alarm</div>
+    <div class="tab-item">Backfill</div>
+    <div class="tab-item">Spark</div>
+    <div class="tab-item">SLA & DR</div>
+  </div>
+  <div class="code-view-wrap">
+    <div class="code-toolbar">
+      <div class="code-toolbar-left">Task Code Template <span style="color:#8C8C8C;margin-left:8px;">Unresolved variables retained</span></div>
+      <div class="code-toolbar-right">
+        <button class="code-tool-btn" title="Full Screen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg></button>
+        <button class="code-tool-btn" title="Increase Font"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></button>
+        <button class="code-tool-btn" title="Decrease Font"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></button>
+        <button class="code-tool-btn" title="Prev"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></button>
+        <button class="code-tool-btn" title="Next"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+      </div>
+    </div>
+    <div class="code-container"></div>
   </div>
 </div>
 
@@ -683,7 +727,7 @@
     <div class="tab-item">Gantt Chart</div>
     <div class="tab-item">Runtime Trend</div>
     <div class="tab-item">Details</div>
-    <div class="tab-item">Code</div>
+    <div class="tab-item" onclick="linkTo('view-task-code')">Code</div>
     <div class="tab-item">Output Config</div>
     <div class="tab-item">Operation Log</div>
     <div class="tab-item">Privilege</div>
@@ -1011,7 +1055,7 @@
       <div class="msg-body">
         <div class="response-wrap">
           <div class="msg-bubble" style="border:none;background:transparent;padding:0;">This task runs <strong>Spark SQL</strong>. Core logic:<br><br>1. Read the day’s orders from <code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">ods.raw_order_data</code><br>2. JOIN <code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">ods.product_catalog</code><br>3. JOIN <code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">dim.user_info</code><br>4. <strong>COLLECT_LIST</strong> aggregates order lines per user<br>5. Write to the <code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">dwd.order_detail</code> partition<br><br>The bottleneck is mainly the Shuffle caused by <strong>COLLECT_LIST</strong> and wide-table JOINs.</div>
-          <div class="resp-section" style="border-bottom:none;"><div class="link-btns"><button type="button" class="link-btn" onclick="linkTo('view-code',null,{taskName:'update_table'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>View Full Code</button></div></div>
+          <div class="resp-section" style="border-bottom:none;"><div class="link-btns"><button type="button" class="link-btn" onclick="linkTo('view-task-code',null,{taskName:'update_table'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>View Task Code</button></div></div>
         </div>
         <div class="msg-actions"><button type="button" class="msg-act" onclick="likeMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg></button><button type="button" class="msg-act" onclick="dislikeMsg(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z"/><path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg></button><button type="button" class="msg-act" onclick="copyMsgContent(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>
       </div>

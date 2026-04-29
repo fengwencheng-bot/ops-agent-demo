@@ -364,15 +364,23 @@ const SessionManager = {
   ensurePresetSessions() {
     var base = Date.now();
     var presets = [
-      { id: 'conv-welcome', title: 'New Chat', icon: 'general', autoTitle: true, relMs: 0, context: createEmptyContext() },
-      { id: 'conv-failure', title: 'Instance Failure · update_table', icon: 'diagnosis', autoTitle: false, relMs: -3600000, context: normalizeContext({ taskName: 'update_table', taskCode: null, instanceId: 'di_scheduler.studio_6801187_20260403_DAY_2' }) },
-      { id: 'conv-info', title: 'Info Query · update_table', icon: 'query', autoTitle: false, relMs: -7200000, context: normalizeContext({ taskName: 'update_table', taskCode: null, instanceId: null }) },
-      { id: 'conv-backfill', title: 'Backfill · update_table', icon: 'operation', autoTitle: false, relMs: -86400000, context: normalizeContext({ taskName: 'update_table', taskCode: 'di_scheduler.studio_6801187', instanceId: null }) },
-      { id: 'conv-large-dep', title: 'Deps · etl_data_warehouse', icon: 'query', autoTitle: false, relMs: -5400000, context: normalizeContext({ taskName: 'etl_data_warehouse', taskCode: 'di_scheduler.studio_7700001', instanceId: null }) }
+      { id: 'conv-welcome', title: 'New Chat', icon: 'general', autoTitle: true, relMs: 0, context: createEmptyContext(), preferredView: 'view-tasklist' },
+      { id: 'conv-failure', title: 'Instance Failure · update_table', icon: 'diagnosis', autoTitle: false, relMs: -3600000, context: normalizeContext({ taskName: 'update_table', taskCode: null, instanceId: 'di_scheduler.studio_6801187_20260403_DAY_2' }), preferredView: 'view-detail' },
+      { id: 'conv-info', title: 'Info Query · update_table', icon: 'query', autoTitle: false, relMs: -7200000, context: normalizeContext({ taskName: 'update_table', taskCode: null, instanceId: null }), preferredView: 'view-task-code' },
+      { id: 'conv-backfill', title: 'Backfill · update_table', icon: 'operation', autoTitle: false, relMs: -86400000, context: normalizeContext({ taskName: 'update_table', taskCode: 'di_scheduler.studio_6801187', instanceId: null }), preferredView: 'view-taskview-matrix' },
+      { id: 'conv-large-dep', title: 'Deps · etl_data_warehouse', icon: 'query', autoTitle: false, relMs: -5400000, context: normalizeContext({ taskName: 'etl_data_warehouse', taskCode: 'di_scheduler.studio_7700001', instanceId: null }), preferredView: 'view-lineage' }
     ];
     for (var i = 0; i < presets.length; i++) {
       var p = presets[i];
-      if (this.getSession(p.id)) continue;
+      var existing = this.getSession(p.id);
+      if (existing) {
+        existing.title = p.title;
+        existing.autoTitle = p.autoTitle;
+        existing.icon = p.icon;
+        existing.context = normalizeContext(p.context);
+        existing.preferredView = p.preferredView;
+        continue;
+      }
       var t = new Date(base + p.relMs).toISOString();
       this.data.sessions.push({
         id: p.id,
@@ -383,6 +391,7 @@ const SessionManager = {
         updatedAt: t,
         pinned: false,
         context: normalizeContext(p.context),
+        preferredView: p.preferredView,
         messages: [],
         lastPreview: ''
       });
@@ -404,6 +413,7 @@ const SessionManager = {
       updatedAt: new Date().toISOString(),
       pinned: false,
       context: normalizeContext(context),
+      preferredView: null,
       messages: [],
       lastPreview: ''
     };
@@ -749,6 +759,7 @@ function navToTask(taskName) {
   upd(document.getElementById('view-taskview-list'));
   upd(document.getElementById('view-lineage'));
   upd(document.getElementById('view-taskview-alarm'));
+  upd(document.getElementById('view-task-code'));
   renderAlarmSetting(taskName);
   const listView = document.getElementById('view-taskview-list');
   if (listView) {
@@ -794,6 +805,7 @@ function navToTask(taskName) {
     }
   }
   updateLineage(taskName);
+  updateTaskCodeView(taskName);
   switchView('view-taskview-matrix');
 }
 
@@ -953,6 +965,9 @@ function navToInstance(instanceId) {
   ['view-detail', 'view-syslog', 'view-code', 'view-instance-lineage'].forEach(vid => {
     const v = document.getElementById(vid);
     if (!v) return;
+    var breadcrumbLinks = v.querySelectorAll('.pg-breadcrumb a');
+    if (breadcrumbLinks[1]) breadcrumbLinks[1].setAttribute('onclick', 'navToTask(\'' + taskName + '\')');
+    if (v.id === 'view-instance-lineage' && breadcrumbLinks[2]) breadcrumbLinks[2].setAttribute('onclick', 'navToInstance(\'' + instanceId + '\')');
     const titleRow = v.querySelector('.pg-title-row .pg-title');
     if (titleRow) titleRow.innerHTML = badge + taskName + (vid === 'view-detail' ? ' ' + SVG_LINK : '');
     const meta = v.querySelector('.pg-meta');
@@ -976,7 +991,7 @@ function navToInstance(instanceId) {
       const key = k.textContent.trim();
       if (key === 'Task Name') val.textContent = taskName;
       if (key === 'Instance Code') { val.textContent = instanceId; val.classList.add('link'); }
-      if (key === 'Task Code') val.innerHTML = '<a class="link" onclick="switchView(\'view-taskview-matrix\')">' + (t.code || '') + '</a>';
+      if (key === 'Task Code') val.innerHTML = '<a class="link" onclick="navToTask(\'' + taskName + '\')">' + (t.code || '') + '</a>';
       if (key === 'Owner') val.textContent = t.owner || val.textContent;
       if (key === 'Task Type') val.innerHTML = '<span class="type-badge">' + (t.type || 'Spark SQL') + '</span>';
       if (key === 'Priority') val.textContent = (PRI_ARROW[t.priority] || t.priority) + ' (' + (PRI_LABEL[t.priority] || 'Medium') + ')';
@@ -989,18 +1004,44 @@ function navToInstance(instanceId) {
       }
     }
   });
-  updateCodeView(taskName);
+  updateInstanceCodeView(taskName, instanceId);
   updateSyslog(instanceId);
   updateInstanceLineage(instanceId);
   switchView('view-detail');
 }
 
-function updateCodeView(taskName) {
-  var cv = document.getElementById('view-code');
+function extractInstanceBizDate(instanceId) {
+  if (!instanceId) return '';
+  var m = instanceId.match(/_(\d{8})_/);
+  return m ? m[1] : '';
+}
+
+function resolveInstanceCode(taskName, instanceId) {
+  var code = TASK_CODES[taskName] || '';
+  var bizDate = extractInstanceBizDate(instanceId);
+  return bizDate ? code.replace(/\$\{bizdate\}/g, bizDate) : code;
+}
+
+function updateTaskCodeView(taskName) {
+  var cv = document.getElementById('view-task-code');
   if (!cv) return;
   var container = cv.querySelector('.code-container');
   if (!container) return;
   var code = TASK_CODES[taskName];
+  if (code) container.innerHTML = code;
+}
+
+function updateInstanceCodeView(taskName, instanceId) {
+  var cv = document.getElementById('view-code');
+  if (!cv) return;
+  var container = cv.querySelector('.code-container');
+  var toolbarLabel = cv.querySelector('.code-toolbar-left');
+  if (!container) return;
+  var bizDate = extractInstanceBizDate(instanceId);
+  if (toolbarLabel) {
+    toolbarLabel.innerHTML = 'Code Version: <span>57</span>' + (bizDate ? '<span style="color:#8C8C8C;margin-left:8px;">Rendered for ' + bizDate + '</span>' : '');
+  }
+  var code = resolveInstanceCode(taskName, instanceId);
   if (code) container.innerHTML = code;
 }
 
@@ -1187,6 +1228,17 @@ function linkTo(viewId, btnId, ctxOverride, withCodeSummary) {
   var ctx = ctxOverride || {};
   var tn = ctx.taskName || currentContext.taskName;
   var iid = ctx.instanceId || currentContext.instanceId;
+  if (tn && viewId === 'view-task-code') {
+    navToTask(tn);
+    tn = currentContext.taskName;
+    if (viewId !== 'view-taskview-matrix') switchView(viewId);
+  }
+  if (iid && (viewId === 'view-syslog' || viewId === 'view-code' || viewId === 'view-detail' || viewId === 'view-instance-lineage')) {
+    navToInstance(iid);
+    tn = currentContext.taskName;
+    iid = currentContext.instanceId;
+    if (viewId !== 'view-detail') switchView(viewId);
+  }
   if (viewId === 'view-lineage' && tn) {
     updateLineage(tn);
     var lv = document.getElementById('view-lineage');
@@ -1201,8 +1253,11 @@ function linkTo(viewId, btnId, ctxOverride, withCodeSummary) {
   if (viewId === 'view-syslog' && iid) {
     updateSyslog(iid);
   }
+  if (viewId === 'view-task-code' && tn) {
+    updateTaskCodeView(tn);
+  }
   if (viewId === 'view-code' && tn) {
-    updateCodeView(tn);
+    updateInstanceCodeView(tn, iid);
   }
   if ((viewId === 'view-syslog' || viewId === 'view-code' || viewId === 'view-detail' || viewId === 'view-instance-lineage') && (iid || tn)) {
     var inf = iid ? INSTANCES[iid] : null;
@@ -1226,7 +1281,7 @@ function linkTo(viewId, btnId, ctxOverride, withCodeSummary) {
   }
   var conv = document.querySelector('.conv-container.active');
   if (conv && !btnId) {
-    var viewLabel = { 'view-syslog': 'System Log', 'view-code': 'Code', 'view-detail': 'Instance Details', 'view-lineage': 'Task Lineage', 'view-instance-lineage': 'Instance Lineage' }[viewId];
+    var viewLabel = { 'view-syslog': 'System Log', 'view-code': 'Instance Code', 'view-task-code': 'Task Code', 'view-detail': 'Instance Details', 'view-lineage': 'Task Lineage', 'view-instance-lineage': 'Instance Lineage' }[viewId];
     if (viewLabel) {
       var annotation = '';
       var resolvedInst = iid || currentContext.instanceId;
@@ -1235,12 +1290,13 @@ function linkTo(viewId, btnId, ctxOverride, withCodeSummary) {
         annotation = genLogSummary(resolvedInst);
       } else if (viewId === 'view-syslog') {
         annotation = '<div class="msg-bubble" style="margin-top:4px;">Opened <strong>System Log</strong> on the left panel.</div>';
-      } else if (viewId === 'view-code') {
+      } else if (viewId === 'view-code' || viewId === 'view-task-code') {
         if (withCodeSummary) {
           var codeSummary = TASK_CODE_SUMMARIES[resolvedTask] || 'This task is a <strong>Spark SQL</strong> daily batch job.';
-          annotation = '<div class="msg-bubble" style="margin-top:4px;">Opened code for <strong>' + resolvedTask + '</strong> on the left panel.<br><br><div style="margin-top:6px;padding:10px 14px;background:linear-gradient(135deg,#FAFBFF 0%,#F5F7FF 100%);border:1px solid #E8ECF4;border-radius:8px;"><div style="font-size:12px;font-weight:600;color:#333;margin-bottom:6px;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>Code Logic Summary</div><div style="font-size:12px;color:#595959;line-height:1.7;">' + codeSummary + '</div></div></div>';
+          var codeScope = viewId === 'view-task-code' ? 'task code' : 'instance code';
+          annotation = '<div class="msg-bubble" style="margin-top:4px;">Opened ' + codeScope + ' for <strong>' + resolvedTask + '</strong> on the left panel.<br><br><div style="margin-top:6px;padding:10px 14px;background:linear-gradient(135deg,#FAFBFF 0%,#F5F7FF 100%);border:1px solid #E8ECF4;border-radius:8px;"><div style="font-size:12px;font-weight:600;color:#333;margin-bottom:6px;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>Code Logic Summary</div><div style="font-size:12px;color:#595959;line-height:1.7;">' + codeSummary + '</div></div></div>';
         } else {
-          annotation = '<div class="msg-bubble" style="margin-top:4px;">Opened code for <strong>' + resolvedTask + '</strong> on the left panel.</div>';
+          annotation = '<div class="msg-bubble" style="margin-top:4px;">Opened <strong>' + (viewId === 'view-task-code' ? 'task code' : 'instance code') + '</strong> for <strong>' + resolvedTask + '</strong> on the left panel.</div>';
         }
       } else {
         annotation = '<div class="msg-bubble">Opened <strong>' + viewLabel + '</strong> on the left panel.</div>';
@@ -1787,6 +1843,45 @@ function renderMessagesInto(container, messages) {
   });
 }
 
+function syncLeftViewToSession(session) {
+  if (!session || isSharedMode()) return;
+  var ctx = normalizeContext(session.context);
+  var viewId = session.preferredView || null;
+  var taskName = ctx.taskName || null;
+  var instanceId = ctx.instanceId || null;
+
+  if (viewId === 'view-tasklist') {
+    switchView('view-tasklist');
+    return;
+  }
+  if (viewId === 'view-task-code' && taskName) {
+    navToTask(taskName);
+    switchView('view-task-code');
+    return;
+  }
+  if (viewId === 'view-lineage' && taskName) {
+    navToTask(taskName);
+    switchView('view-lineage');
+    return;
+  }
+  if (viewId === 'view-taskview-matrix' && taskName) {
+    navToTask(taskName);
+    return;
+  }
+  if (instanceId && (viewId === 'view-detail' || viewId === 'view-code' || viewId === 'view-syslog' || viewId === 'view-instance-lineage')) {
+    navToInstance(instanceId);
+    if (viewId !== 'view-detail') switchView(viewId);
+    return;
+  }
+  if (instanceId) {
+    navToInstance(instanceId);
+    return;
+  }
+  if (taskName) {
+    navToTask(taskName);
+  }
+}
+
 function enterSharedMode(payload, encodedShare) {
   var shared = payload.session || {};
   document.body.classList.add('shared-mode');
@@ -1928,6 +2023,7 @@ function switchSessionById(sessionId) {
   if (sess && sess.context) {
     currentContext = normalizeContext(sess.context);
   }
+  syncLeftViewToSession(sess);
   closeSessionList();
   renderSessionTabs();
   scrollActiveConv();
@@ -2699,12 +2795,18 @@ function genSearchTasks(filter) {
 
 function genInfoCode(ctx, embedSummary) {
   const name = ctx.taskName || 'update_table';
+  const isInstanceScoped = !!ctx.instanceId;
+  const targetView = isInstanceScoped ? 'view-code' : 'view-task-code';
+  const targetCtx = isInstanceScoped
+    ? "{taskName:'" + name + "',instanceId:'" + ctx.instanceId + "'}"
+    : "{taskName:'" + name + "'}";
+  const btnLabel = isInstanceScoped ? 'View Instance Code' : 'View Task Code';
   var summary = TASK_CODE_SUMMARIES[name] || 'This task is a <strong>Spark SQL</strong> daily batch job.';
   if (embedSummary === false) {
-    return '<div class="response-wrap"><div class="resp-section" style="border-bottom:none;"><div class="link-btns"><button type="button" class="link-btn" onclick="linkTo(\'view-code\',null,{taskName:\'' + name + '\'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>View Full Code</button></div></div></div>';
+    return '<div class="response-wrap"><div class="resp-section" style="border-bottom:none;"><div class="link-btns"><button type="button" class="link-btn" onclick="linkTo(\'' + targetView + '\',null,' + targetCtx + ')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>' + btnLabel + '</button></div></div></div>';
   }
   return '<div class="response-wrap"><div class="msg-bubble" style="border:none;background:transparent;padding:0 0 4px;">' + summary + '</div>' +
-'<div class="resp-section" style="border-bottom:none;"><div class="link-btns"><button type="button" class="link-btn" onclick="linkTo(\'view-code\',null,{taskName:\'' + name + '\'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>View Full Code</button></div></div></div>';
+'<div class="resp-section" style="border-bottom:none;"><div class="link-btns"><button type="button" class="link-btn" onclick="linkTo(\'' + targetView + '\',null,' + targetCtx + ')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>' + btnLabel + '</button></div></div></div>';
 }
 
 function buildOpSection(title, summary, content, options) {
@@ -2786,10 +2888,15 @@ function genOperationConfirm(intent, ctx) {
     }
 
     var summaryRow = '<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Summary On Rerun Completion</span><span class="ac-val-edit" style="flex-direction:column;align-items:stretch;"><div class="rerun-summary-list" id="' + uid + '-summary-list"></div><div class="ac-add-btn" style="text-align:center;" onclick="addRerunAlarmPolicy(\'' + uid + '\')">+ Add</div></span></div>';
+    var rerunContextBlock = '<div class="op-context-block">' +
+      '<div class="op-context-name">' + name + '</div>' +
+      '<div class="op-context-code">' + taskCode + '</div>' +
+      (inst ? '<div class="op-context-code">' + inst + '</div>' : '') +
+      '</div>';
+    var rerunInstanceRow = inst ? '' : instRow.replace('Instance Code', 'Task Instance Code');
     var rerunContextSection = buildOpSection('Execution Scope', 'Instance and downstream scope', 
-      '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
-      '<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
-      instRow +
+      rerunContextBlock +
+      rerunInstanceRow +
       '<div class="ac-row"><span class="ac-key">Event Name</span><span class="ac-val-edit"><input class="ac-input" id="' + uid + '-event-name" type="text" value="' + eventName + '" style="font-size:11px;"/></span></div>' +
       '<div class="ac-row"><span class="ac-key">Include Downstream</span><span class="ac-val-edit"><select class="ac-select" id="' + uid + '-downstream" onchange="toggleCascadeRerun(\'' + uid + '\',\'' + name + '\')"><option value="no" selected>No (rerun this instance only)</option><option value="yes">Yes (cascade rerun downstream)</option></select></span></div>' +
       downstreamScopeHtml
