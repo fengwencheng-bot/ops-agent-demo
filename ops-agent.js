@@ -1392,11 +1392,29 @@ function toggleSessionList() {
   }
 }
 
+function promptClearAllSessions() {
+  var activeId = SessionManager.data.activeSessionId;
+  var others = SessionManager.data.sessions.filter(function (s) { return s.id !== activeId && SESSION_PRESET_IDS.indexOf(s.id) < 0; });
+  if (others.length === 0) { showToast('Nothing to clear'); return; }
+  var btn = document.getElementById('clearAllBtn');
+  var confirm = document.getElementById('clearAllConfirm');
+  if (btn) btn.style.display = 'none';
+  if (confirm) confirm.style.display = 'flex';
+}
+
+function cancelClearAllSessions() {
+  var btn = document.getElementById('clearAllBtn');
+  var confirm = document.getElementById('clearAllConfirm');
+  if (btn) btn.style.display = '';
+  if (confirm) confirm.style.display = 'none';
+}
+
 function closeSessionList() {
   var dd = document.getElementById('historyDropdown');
   var bd = document.getElementById('hdBackdrop');
   if (dd) { dd.classList.remove('open'); dd.style.display = 'none'; }
   if (bd) bd.classList.remove('open');
+  cancelClearAllSessions();
   var searchInput = document.querySelector('.hd-search-input');
   if (searchInput) searchInput.value = '';
 }
@@ -2048,6 +2066,7 @@ function clearAllSessions() {
   var others = SessionManager.data.sessions.filter(function (s) { return s.id !== activeId && SESSION_PRESET_IDS.indexOf(s.id) < 0; });
   if (others.length === 0) { showToast('Nothing to clear'); return; }
   SessionManager.clearAll(activeId);
+  cancelClearAllSessions();
   renderSessionList();
   showToast('All other chats cleared');
 }

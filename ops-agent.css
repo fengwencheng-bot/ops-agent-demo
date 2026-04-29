@@ -360,7 +360,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC
 .layout.agent-fullscreen .input-area{max-width:1200px;margin:0 auto;width:100%;padding-left:40px;padding-right:40px;box-sizing:border-box;}
 body.shared-mode{background:#F5F7FA;}
 body.shared-mode .top-nav,body.shared-mode .sidebar,body.shared-mode .left-content,body.shared-mode .ap-mini,body.shared-mode .resize-handle,body.shared-mode .input-area,body.shared-mode #historyDropdown,body.shared-mode #hdBackdrop,body.shared-mode #stbMoreDropdown,body.shared-mode .stb-actions,body.shared-mode .ap-h-actions,body.shared-mode .shared-view-bar{display:none !important;}
-body.shared-mode .layout{display:block;height:100vh;}
+body.shared-mode .layout{display:block;height:100vh;margin-top:0;}
 body.shared-mode .agent-panel{width:100vw !important;min-width:100vw !important;max-width:none !important;height:100vh;border-left:none;border-radius:0;box-shadow:none;background:#fff;}
 body.shared-mode .ap-header{cursor:default;background:#fff;}
 body.shared-mode .ap-h-left{padding-right:12px;}
@@ -470,7 +470,14 @@ body.shared-mode .follow-up-wrap{display:none !important;}
 .hd-search-input:focus{border-color:#1890FF;background:#fff;box-shadow:0 0 0 2px rgba(24,144,255,.08);}
 .hd-search-icon{position:absolute;left:20px;top:50%;transform:translateY(-50%);color:#BFBFBF;pointer-events:none;margin-top:2px;}
 .hd-body{flex:1;overflow-y:auto;max-height:320px;}
-.hd-footer{padding:6px 12px;border-top:1px solid #F0F0F0;display:flex;justify-content:center;}
+.hd-footer{padding:8px 12px;border-top:1px solid #F0F0F0;display:flex;justify-content:center;align-items:center;min-height:44px;}
+.hd-confirm{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.hd-confirm-text{font-size:12px;color:#595959;line-height:1.4;}
+.hd-confirm-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.hd-confirm-btn{height:28px;padding:0 10px;border:1px solid #D9D9D9;border-radius:6px;background:#fff;color:#595959;font-size:12px;cursor:pointer;transition:.15s;}
+.hd-confirm-btn:hover{border-color:#91D5FF;color:#1890FF;background:#F0F8FF;}
+.hd-confirm-btn.danger{border-color:#FFCCC7;color:#CF1322;background:#FFF1F0;}
+.hd-confirm-btn.danger:hover{border-color:#FF7875;color:#fff;background:#FF4D4F;}
 .hd-backdrop{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:15;}
 .hd-backdrop.open{display:block;}
 .share-modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.24);z-index:30;}

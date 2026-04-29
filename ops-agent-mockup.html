@@ -879,7 +879,16 @@
   <div class="history-dropdown" id="historyDropdown" style="display:none">
     <div class="hd-search"><svg class="hd-search-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input class="hd-search-input" type="text" placeholder="Search chats..." oninput="filterSessions(this.value)"/></div>
     <div class="hd-body" id="sessionListBody"></div>
-    <div class="hd-footer"><button class="sl-clear-btn" type="button" onclick="clearAllSessions()">Clear All</button></div>
+    <div class="hd-footer">
+      <button class="sl-clear-btn" id="clearAllBtn" type="button" onclick="promptClearAllSessions()">Clear All</button>
+      <div class="hd-confirm" id="clearAllConfirm" style="display:none">
+        <div class="hd-confirm-text">Clear all other chats?</div>
+        <div class="hd-confirm-actions">
+          <button class="hd-confirm-btn" type="button" onclick="cancelClearAllSessions()">Cancel</button>
+          <button class="hd-confirm-btn danger" type="button" onclick="clearAllSessions()">Clear</button>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="hd-backdrop" id="hdBackdrop" onclick="closeSessionList()"></div>
   <div class="share-modal-backdrop" id="shareModalBackdrop" style="display:none" onclick="closeShareDialog()"></div>
