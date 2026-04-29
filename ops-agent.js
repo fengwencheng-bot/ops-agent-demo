@@ -569,6 +569,33 @@ const DEPS = {
            'ads_category_ranking','ads_merchant_score','ads_search_quality','ads_realtime_monitor']
   }
 };
+
+function ensureDependencySymmetry() {
+  Object.keys(DEPS).forEach(function(taskName) {
+    if (!DEPS[taskName]) DEPS[taskName] = { up: [], down: [] };
+    if (!Array.isArray(DEPS[taskName].up)) DEPS[taskName].up = [];
+    if (!Array.isArray(DEPS[taskName].down)) DEPS[taskName].down = [];
+  });
+
+  Object.keys(DEPS).forEach(function(taskName) {
+    var dep = DEPS[taskName];
+    dep.up.forEach(function(upTask) {
+      if (!DEPS[upTask]) DEPS[upTask] = { up: [], down: [] };
+      if (!Array.isArray(DEPS[upTask].up)) DEPS[upTask].up = [];
+      if (!Array.isArray(DEPS[upTask].down)) DEPS[upTask].down = [];
+      if (DEPS[upTask].down.indexOf(taskName) < 0) DEPS[upTask].down.push(taskName);
+    });
+    dep.down.forEach(function(downTask) {
+      if (!DEPS[downTask]) DEPS[downTask] = { up: [], down: [] };
+      if (!Array.isArray(DEPS[downTask].up)) DEPS[downTask].up = [];
+      if (!Array.isArray(DEPS[downTask].down)) DEPS[downTask].down = [];
+      if (DEPS[downTask].up.indexOf(taskName) < 0) DEPS[downTask].up.push(taskName);
+    });
+  });
+}
+
+ensureDependencySymmetry();
+
 const SVG_LINK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>';
 
 function statusBadgeClass(s) {
@@ -580,6 +607,22 @@ function statusBadgeClass(s) {
 
 function getTaskInstances(taskName) {
   return Object.entries(INSTANCES).filter(function(e) { return e[1].task === taskName; });
+}
+
+function getTaskInstancesForBizDate(taskName, bizDate) {
+  var taskInstances = getTaskInstances(taskName);
+  if (!bizDate) return taskInstances;
+  return taskInstances.filter(function(e) {
+    return extractInstanceBizDate(e[0]) === bizDate;
+  });
+}
+
+function getMatchedTaskInstance(taskName, bizDate) {
+  var matchedInstances = getTaskInstancesForBizDate(taskName, bizDate);
+  if (matchedInstances.length > 0) return matchedInstances[matchedInstances.length - 1];
+  if (bizDate) return null;
+  var taskInstances = getTaskInstances(taskName);
+  return taskInstances.length ? taskInstances[taskInstances.length - 1] : null;
 }
 
 function getUnresolvedUpstreamCandidates(taskName) {
@@ -881,6 +924,7 @@ function updateInstanceLineage(instanceId) {
   const taskName = inf.task;
   const t = TASKS[taskName] || {};
   const dep = DEPS[taskName] || { up: [], down: [] };
+  const bizDate = extractInstanceBizDate(instanceId);
 
   const titleRow = ilv.querySelector('.pg-title-row .pg-title');
   if (titleRow) titleRow.innerHTML = '<span class="status-badge ' + statusBadgeClass(inf.status) + '">' + inf.status + '</span> ' + taskName + ' ' + SVG_LINK;
@@ -895,15 +939,14 @@ function updateInstanceLineage(instanceId) {
   }
 
   function instNode(tName, isCurrent) {
-    var tInsts = Object.entries(INSTANCES).filter(function(e) { return e[1].task === tName; });
-    var latestInst = tInsts.length ? tInsts[tInsts.length - 1] : null;
-    var instId = latestInst ? latestInst[0] : '';
-    var instStatus = latestInst ? latestInst[1].status : 'Unknown';
+    var matchedInst = isCurrent ? [instanceId, inf] : getMatchedTaskInstance(tName, bizDate);
+    var instId = matchedInst ? matchedInst[0] : '';
+    var instStatus = matchedInst ? matchedInst[1].status : 'Unknown';
     var statusColor = instStatus === 'Failed' ? '#FF4D4F' : instStatus === 'Running' ? '#FA8C16' : instStatus === 'Waiting' ? '#D46B08' : '#52C41A';
     var bgColor = isCurrent ? 'background:#F0F2F5;' : '';
     var borderColor = isCurrent ? 'border-color:#1890FF;box-shadow:0 2px 8px rgba(24,144,255,.15);' : '';
     var iconBg = isCurrent ? 'background:#F0F2F5;color:#1890FF;' : 'background:#F0F2F5;color:#1890FF;';
-    var clickAttr = isCurrent ? '' : ' onclick="navToInstance(\'' + instId + '\')"';
+    var clickAttr = (!isCurrent && instId) ? ' onclick="navToInstance(\'' + instId + '\')"' : '';
     var extraBtn = isCurrent ? '<button style="border:none;background:none;color:#8C8C8C;cursor:pointer;font-size:16px;padding:0 4px;">···</button>' : '';
     return '<div class="dag-node' + (isCurrent ? ' current' : '') + '"' + clickAttr + ' style="' + bgColor + borderColor + '">' +
       '<div class="dag-node-icon" style="' + iconBg + '">SQL</div>' +
@@ -2572,23 +2615,20 @@ function genInfoDependency(ctx, level) {
   const dep = DEPS[name] || { up: [], down: [] };
   var useInstance = (level === 'instance') || (inst && level !== 'task');
   if (useInstance && inst) {
+    var bizDate = extractInstanceBizDate(inst);
     var upCount = 0;
     var upItems = dep.up.map(function(u) {
-      var uInsts = Object.entries(INSTANCES).filter(function(e) { return e[1].task === u; });
-      if (uInsts.length === 0) return '';
-      upCount += uInsts.length;
-      return uInsts.map(function(e) {
-        return '<div class="dep-item"><span class="dep-name" onclick="navToInstance(\'' + e[0] + '\')">' + e[0] + '</span><span class="dep-meta">' + u + '</span></div>';
-      }).join('');
+      var uInst = getMatchedTaskInstance(u, bizDate);
+      if (!uInst) return '';
+      upCount += 1;
+      return '<div class="dep-item"><span class="dep-name" onclick="navToInstance(\'' + uInst[0] + '\')">' + uInst[0] + '</span><span class="dep-meta">' + u + '</span></div>';
     }).join('');
     var downCount = 0;
     var downItems = dep.down.map(function(d) {
-      var dInsts = Object.entries(INSTANCES).filter(function(e) { return e[1].task === d; });
-      if (dInsts.length === 0) return '';
-      downCount += dInsts.length;
-      return dInsts.map(function(e) {
-        return '<div class="dep-item"><span class="dep-name" onclick="navToInstance(\'' + e[0] + '\')">' + e[0] + '</span><span class="dep-meta">' + d + '</span></div>';
-      }).join('');
+      var dInst = getMatchedTaskInstance(d, bizDate);
+      if (!dInst) return '';
+      downCount += 1;
+      return '<div class="dep-item"><span class="dep-name" onclick="navToInstance(\'' + dInst[0] + '\')">' + dInst[0] + '</span><span class="dep-meta">' + d + '</span></div>';
     }).join('');
     upItems = buildDepItems(upItems, upCount, 'up');
     downItems = buildDepItems(downItems, downCount, 'down');
