@@ -2389,6 +2389,13 @@ function resolveContext(text, entities, intent) {
 }
 
 function classifyIntent(text) {
+  function getDependencyDirection(rawText) {
+    var hasUpstream = /上游|upstream/i.test(rawText);
+    var hasDownstream = /下游|downstream/i.test(rawText);
+    if (hasUpstream && !hasDownstream) return 'upstream';
+    if (hasDownstream && !hasUpstream) return 'downstream';
+    return 'both';
+  }
   if (/你能做什么|你的功能|你能帮我|你可以做|你会什么|介绍.*功能|功能.*介绍|你有什么能力|能力.*介绍|支持.*运维操作|运维操作.*支持|使用帮助|怎么用|如何使用|支持.*能力|能力.*支持|支持.*什么|what can you do|your capabilities|what do you support|help|usage guide|capability.*(intro|overview|list)|what.*capabilities|capabilities.*what|what features|introduce yourself|what are you/i.test(text)) return { type: 'capability_intro' };
   if (/哪些.*失败|失败.*哪些|失败.*任务|失败.*实例|运行失败|which.*failed|failed.*which|failed.*task|failed.*instance/i.test(text) && !/为什么|诊断|分析|why|diagnos|analyz/i.test(text)) return { type: 'search_instances', filter: 'Failed' };
   if (/哪些.*异常|异常.*实例|异常.*任务|有问题.*实例|问题.*任务|which.*abnormal|abnormal.*instance|problem.*instance/i.test(text)) return { type: 'search_instances', filter: 'abnormal' };
@@ -2411,9 +2418,10 @@ function classifyIntent(text) {
   if (/诊断|分析|diagnos|analyz/i.test(text)) return { type: 'diagnosis_auto', level: 'instance' };
   if (/跳过.*依赖|skip.*dep|忽略.*依赖|依赖.*跳过|依赖.*忽略/i.test(text)) return { type: 'op_skip_dep', level: 'instance' };
   if (/依赖|上游|下游|dependenc|upstream|downstream/i.test(text)) {
-    if (/(?:任务|\btask\b)/i.test(text) && !/(?:实例|di_scheduler|\binstance\b)/i.test(text)) return { type: 'info_dependency', level: 'task' };
-    if (/实例|di_scheduler|\binstance\b/i.test(text)) return { type: 'info_dependency', level: 'instance' };
-    return { type: 'info_dependency' };
+    var depDirection = getDependencyDirection(text);
+    if (/(?:任务|\btask\b)/i.test(text) && !/(?:实例|di_scheduler|\binstance\b)/i.test(text)) return { type: 'info_dependency', level: 'task', direction: depDirection };
+    if (/实例|di_scheduler|\binstance\b/i.test(text)) return { type: 'info_dependency', level: 'instance', direction: depDirection };
+    return { type: 'info_dependency', direction: depDirection };
   }
   if (/代码|做什么|逻辑|sql|脚本|code|what does|logic/i.test(text)) return { type: 'info_code' };
   if (/重跑|rerun/i.test(text)) return { type: 'op_rerun', level: 'instance' };
@@ -2588,10 +2596,11 @@ function genDiagnosisResource(ctx) {
 }
 
 function buildDepItems(items, totalCount, direction) {
-  var COLLAPSE_THRESHOLD = 10;
+  var COLLAPSE_THRESHOLD = 5;
   var INITIAL_SHOW = 5;
   if (totalCount <= COLLAPSE_THRESHOLD) return items;
   var uid = 'dep-' + direction + '-' + Date.now();
+  var directionLabel = direction.indexOf('up') >= 0 ? 'direct upstreams' : 'direct downstreams';
   var allItems = items;
   var shownPart = '';
   var hiddenPart = '';
@@ -2605,63 +2614,138 @@ function buildDepItems(items, totalCount, direction) {
   var remaining = totalCount - INITIAL_SHOW;
   return shownPart +
     '<div id="' + uid + '-hidden" style="display:none;">' + hiddenPart + '</div>' +
-    '<div id="' + uid + '-toggle" class="dep-expand-btn" onclick="var h=document.getElementById(\'' + uid + '-hidden\');var t=document.getElementById(\'' + uid + '-toggle\');if(h.style.display===\'none\'){h.style.display=\'\';t.innerHTML=\'<svg width=\\\'12\\\' height=\\\'12\\\' viewBox=\\\'0 0 24 24\\\' fill=\\\'none\\\' stroke=\\\'currentColor\\\' stroke-width=\\\'2\\\'><path d=\\\'M18 15l-6-6-6 6\\\'/></svg> Collapse\';}else{h.style.display=\'none\';t.innerHTML=\'<svg width=\\\'12\\\' height=\\\'12\\\' viewBox=\\\'0 0 24 24\\\' fill=\\\'none\\\' stroke=\\\'currentColor\\\' stroke-width=\\\'2\\\'><path d=\\\'M6 9l6 6 6-6\\\'/></svg> Show remaining ' + remaining + ' items\';}">' +
-    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg> Show remaining ' + remaining + ' items</div>';
+    '<div id="' + uid + '-toggle" class="dep-expand-btn" onclick="var h=document.getElementById(\'' + uid + '-hidden\');var t=document.getElementById(\'' + uid + '-toggle\');if(h.style.display===\'none\'){h.style.display=\'\';t.innerHTML=\'<svg width=\\\'12\\\' height=\\\'12\\\' viewBox=\\\'0 0 24 24\\\' fill=\\\'none\\\' stroke=\\\'currentColor\\\' stroke-width=\\\'2\\\'><path d=\\\'M18 15l-6-6-6 6\\\'/></svg> Collapse\';}else{h.style.display=\'none\';t.innerHTML=\'<svg width=\\\'12\\\' height=\\\'12\\\' viewBox=\\\'0 0 24 24\\\' fill=\\\'none\\\' stroke=\\\'currentColor\\\' stroke-width=\\\'2\\\'><path d=\\\'M6 9l6 6 6-6\\\'/></svg> Show all ' + directionLabel + '\';}">' +
+    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg> Show all ' + directionLabel + '</div>';
 }
 
-function genInfoDependency(ctx, level) {
+function getDependencyStatusPriority(status, direction) {
+  if (direction === 'upstream') {
+    if (status === 'Failed') return 0;
+    if (status === 'Waiting') return 1;
+    if (status === 'Running') return 2;
+    if (status === 'Successful') return 3;
+    return 4;
+  }
+  if (status === 'Waiting') return 0;
+  if (status === 'Failed') return 1;
+  if (status === 'Running') return 2;
+  if (status === 'Successful') return 3;
+  return 4;
+}
+
+function getTaskLatestInstance(taskName) {
+  var taskInstances = getTaskInstances(taskName);
+  return taskInstances.length ? taskInstances[taskInstances.length - 1] : null;
+}
+
+function buildTaskDependencyItems(taskNames, direction) {
+  return taskNames.map(function(taskName) {
+    var task = TASKS[taskName] || {};
+    var latestInstance = getTaskLatestInstance(taskName);
+    var latestStatus = latestInstance ? latestInstance[1].status : '';
+    return {
+      taskName: taskName,
+      taskCode: (task.code || '').replace('di_scheduler.', ''),
+      latestStatus: latestStatus,
+      statusPriority: getDependencyStatusPriority(latestStatus, direction)
+    };
+  }).sort(function(a, b) {
+    if (a.statusPriority !== b.statusPriority) return a.statusPriority - b.statusPriority;
+    return a.taskName.localeCompare(b.taskName);
+  });
+}
+
+function buildInstanceDependencyItems(taskNames, bizDate, direction) {
+  return taskNames.map(function(taskName) {
+    var matchedInstance = getMatchedTaskInstance(taskName, bizDate);
+    if (!matchedInstance) return null;
+    return {
+      taskName: taskName,
+      instanceId: matchedInstance[0],
+      status: matchedInstance[1].status || 'Unknown',
+      statusPriority: getDependencyStatusPriority(matchedInstance[1].status || 'Unknown', direction)
+    };
+  }).filter(Boolean).sort(function(a, b) {
+    if (a.statusPriority !== b.statusPriority) return a.statusPriority - b.statusPriority;
+    return a.taskName.localeCompare(b.taskName);
+  });
+}
+
+function renderTaskDependencyItems(items) {
+  return items.map(function(item) {
+    var statusBadge = item.latestStatus ? '<span class="status-badge ' + statusBadgeClass(item.latestStatus) + '" style="font-size:10px;padding:0 5px;">' + item.latestStatus + '</span>' : '';
+    var meta = 'Daily' + (item.taskCode ? ' · ' + item.taskCode : '');
+    return '<div class="dep-item"><span class="dep-name" onclick="navToTask(\'' + item.taskName + '\')">' + item.taskName + '</span><span class="dep-meta">' + meta + '</span>' + statusBadge + '</div>';
+  }).join('');
+}
+
+function renderInstanceDependencyItems(items) {
+  return items.map(function(item) {
+    return '<div class="dep-item"><span class="dep-name" onclick="navToInstance(\'' + item.instanceId + '\')">' + item.instanceId + '</span><span class="dep-meta">' + item.taskName + '</span><span class="status-badge ' + statusBadgeClass(item.status) + '" style="font-size:10px;padding:0 5px;">' + item.status + '</span></div>';
+  }).join('');
+}
+
+function genInfoDependency(ctx, level, direction) {
   const name = ctx.taskName || 'update_table';
   const inst = ctx.instanceId;
   const dep = DEPS[name] || { up: [], down: [] };
+  var depDirection = direction || 'both';
   var useInstance = (level === 'instance') || (inst && level !== 'task');
   if (useInstance && inst) {
     var bizDate = extractInstanceBizDate(inst);
-    var upCount = 0;
-    var upItems = dep.up.map(function(u) {
-      var uInst = getMatchedTaskInstance(u, bizDate);
-      if (!uInst) return '';
-      upCount += 1;
-      return '<div class="dep-item"><span class="dep-name" onclick="navToInstance(\'' + uInst[0] + '\')">' + uInst[0] + '</span><span class="dep-meta">' + u + '</span></div>';
-    }).join('');
-    var downCount = 0;
-    var downItems = dep.down.map(function(d) {
-      var dInst = getMatchedTaskInstance(d, bizDate);
-      if (!dInst) return '';
-      downCount += 1;
-      return '<div class="dep-item"><span class="dep-name" onclick="navToInstance(\'' + dInst[0] + '\')">' + dInst[0] + '</span><span class="dep-meta">' + d + '</span></div>';
-    }).join('');
+    var upstreamItems = buildInstanceDependencyItems(dep.up, bizDate, 'upstream');
+    var downstreamItems = buildInstanceDependencyItems(dep.down, bizDate, 'downstream');
+    var upCount = upstreamItems.length;
+    var downCount = downstreamItems.length;
+    var abnormalUpCount = upstreamItems.filter(function(item) { return item.status !== 'Successful'; }).length;
+    var upItems = renderInstanceDependencyItems(upstreamItems);
+    var downItems = renderInstanceDependencyItems(downstreamItems);
     upItems = buildDepItems(upItems, upCount, 'up');
     downItems = buildDepItems(downItems, downCount, 'down');
     var groups = '';
-    if (upCount > 0) groups += '<div class="dep-group"><div class="dep-group-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FA8C16" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Upstream Dependencies (' + upCount + ' instance(s))</div>' + upItems + '</div>';
-    if (downCount > 0) groups += '<div class="dep-group" style="margin-bottom:0;"><div class="dep-group-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Downstream Dependencies (' + downCount + ' instance(s))</div>' + downItems + '</div>';
+    if (depDirection !== 'downstream' && upCount > 0) groups += '<div class="dep-group"><div class="dep-group-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FA8C16" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Direct Upstream (' + upCount + ' instance(s))</div>' + upItems + '</div>';
+    if (depDirection !== 'upstream' && downCount > 0) groups += '<div class="dep-group" style="margin-bottom:0;"><div class="dep-group-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Direct Downstream (' + downCount + ' instance(s))</div>' + downItems + '</div>';
     if (!groups) groups = '<div class="dep-item"><span class="dep-meta">No upstream or downstream dependencies</span></div>';
     var totalDeps = upCount + downCount;
     var summaryNote = totalDeps > 10 ? '<div style="font-size:11px;color:#8C8C8C;margin-top:6px;">Showing summary; use lineage view for the full dependency graph.</div>' : '';
-    return '<div class="response-wrap"><div class="msg-bubble" style="border:none;background:transparent;padding:0 0 8px;">Instance <strong>' + inst + '</strong> (<code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">' + name + '</code>) instance-level dependencies are as follows:</div>' +
+    var summaryText = '';
+    if (depDirection === 'upstream') {
+      summaryText = 'Instance <strong>' + inst + '</strong> has <strong>' + upCount + '</strong> direct upstream instance(s).';
+      if (abnormalUpCount > 0) summaryText += ' <strong>' + abnormalUpCount + '</strong> upstream instance(s) are not ready.';
+    } else if (depDirection === 'downstream') {
+      summaryText = 'Instance <strong>' + inst + '</strong> has <strong>' + downCount + '</strong> direct downstream instance(s).';
+    } else {
+      summaryText = 'Instance <strong>' + inst + '</strong> has <strong>' + upCount + '</strong> direct upstream instance(s) and <strong>' + downCount + '</strong> direct downstream instance(s).';
+      if (abnormalUpCount > 0) summaryText += ' <strong>' + abnormalUpCount + '</strong> upstream instance(s) are not ready.';
+    }
+    var actionButtons = '<button type="button" class="link-btn" onclick="linkTo(\'view-instance-lineage\',null,{taskName:\'' + name + '\',instanceId:\'' + inst + '\'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>View Instance Lineage</button>';
+    return '<div class="response-wrap"><div class="msg-bubble" style="border:none;background:transparent;padding:0 0 8px;">' + summaryText + '</div>' +
 '<div class="r-card"><div class="r-card-b" style="padding:14px;">' + groups + summaryNote + '</div></div>' +
-'<div class="resp-section" style="border-bottom:none;"><div class="link-btns"><button type="button" class="link-btn" onclick="linkTo(\'view-instance-lineage\',null,{taskName:\'' + name + '\',instanceId:\'' + inst + '\'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>View Instance Lineage</button></div></div></div>';
+'<div class="resp-section" style="border-bottom:none;"><div class="link-btns">' + actionButtons + '</div></div></div>';
   }
   const t = TASKS[name] || TASKS.update_table;
-  var upHtml = dep.up.map(function(u) {
-    var ut = TASKS[u] || {};
-    return '<div class="dep-item"><span class="dep-name" onclick="navToTask(\'' + u + '\')">' + u + '</span><span class="dep-meta">Daily · ' + (ut.code || '').replace('di_scheduler.','') + '</span></div>';
-  }).join('');
-  var downHtml = dep.down.map(function(d) {
-    var dt = TASKS[d] || {};
-    return '<div class="dep-item"><span class="dep-name" onclick="navToTask(\'' + d + '\')">' + d + '</span><span class="dep-meta">Daily · ' + (dt.code || '').replace('di_scheduler.','') + '</span></div>';
-  }).join('');
-  upHtml = buildDepItems(upHtml, dep.up.length, 'taskup');
-  downHtml = buildDepItems(downHtml, dep.down.length, 'taskdown');
+  var upstreamTasks = buildTaskDependencyItems(dep.up, 'upstream');
+  var downstreamTasks = buildTaskDependencyItems(dep.down, 'downstream');
+  var upHtml = buildDepItems(renderTaskDependencyItems(upstreamTasks), upstreamTasks.length, 'taskup');
+  var downHtml = buildDepItems(renderTaskDependencyItems(downstreamTasks), downstreamTasks.length, 'taskdown');
   var groups = '';
-  if (dep.up.length > 0) groups += '<div class="dep-group"><div class="dep-group-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FA8C16" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Upstream Dependencies (' + dep.up.length + ' task(s))</div>' + upHtml + '</div>';
-  if (dep.down.length > 0) groups += '<div class="dep-group" style="margin-bottom:0;"><div class="dep-group-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Downstream Dependencies (' + dep.down.length + ' task(s))</div>' + downHtml + '</div>';
+  if (depDirection !== 'downstream' && upstreamTasks.length > 0) groups += '<div class="dep-group"><div class="dep-group-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FA8C16" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Direct Upstream (' + upstreamTasks.length + ' task(s))</div>' + upHtml + '</div>';
+  if (depDirection !== 'upstream' && downstreamTasks.length > 0) groups += '<div class="dep-group" style="margin-bottom:0;"><div class="dep-group-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg> Direct Downstream (' + downstreamTasks.length + ' task(s))</div>' + downHtml + '</div>';
   if (!groups) groups = '<div class="dep-item"><span class="dep-meta">No upstream or downstream dependencies</span></div>';
-  var totalDeps = dep.up.length + dep.down.length;
+  var totalDeps = upstreamTasks.length + downstreamTasks.length;
   var summaryNote = totalDeps > 10 ? '<div style="font-size:11px;color:#8C8C8C;margin-top:6px;">Showing summary; use lineage view for the full dependency graph.</div>' : '';
-  return '<div class="response-wrap"><div class="msg-bubble" style="border:none;background:transparent;padding:0 0 8px;">Task <strong>' + name + '</strong> (<code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">' + (t.code || '') + '</code>) task-level dependencies (' + totalDeps + ' total):</div>' +
+  var taskSummary = '';
+  if (depDirection === 'upstream') {
+    taskSummary = 'Task <strong>' + name + '</strong> has <strong>' + upstreamTasks.length + '</strong> direct upstream task(s).';
+  } else if (depDirection === 'downstream') {
+    taskSummary = 'Task <strong>' + name + '</strong> has <strong>' + downstreamTasks.length + '</strong> direct downstream task(s).';
+  } else {
+    taskSummary = 'Task <strong>' + name + '</strong> has <strong>' + upstreamTasks.length + '</strong> direct upstream task(s) and <strong>' + downstreamTasks.length + '</strong> direct downstream task(s).';
+  }
+  var taskActionButtons = '<button type="button" class="link-btn" onclick="linkTo(\'view-lineage\',null,{taskName:\'' + name + '\'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>View Task Lineage</button>';
+  return '<div class="response-wrap"><div class="msg-bubble" style="border:none;background:transparent;padding:0 0 8px;">' + taskSummary + '</div>' +
 '<div class="r-card"><div class="r-card-b" style="padding:14px;">' + groups + summaryNote + '</div></div>' +
-'<div class="resp-section" style="border-bottom:none;"><div class="link-btns"><button type="button" class="link-btn" onclick="linkTo(\'view-lineage\',null,{taskName:\'' + name + '\'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>View Task Lineage</button></div></div></div>';
+'<div class="resp-section" style="border-bottom:none;"><div class="link-btns">' + taskActionButtons + '</div></div></div>';
 }
 
 var TASK_CODE_SUMMARIES = {
@@ -4050,7 +4134,7 @@ async function simulateSendWithText(text) {
     }
     case 'search_instances': response = genSearchInstances(intent.filter); break;
     case 'search_tasks': response = genSearchTasks(intent.filter); break;
-    case 'info_dependency': response = genInfoDependency(currentContext, intent.level); break;
+    case 'info_dependency': response = genInfoDependency(currentContext, intent.level, intent.direction); break;
     case 'info_code': response = genInfoCode(currentContext); break;
     case 'info_priority': {
       if (!currentContext.taskName) {
