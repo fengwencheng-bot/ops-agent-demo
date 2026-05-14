@@ -456,49 +456,35 @@
   </div>
   <table class="data-table">
     <thead><tr><th style="width:36px"><input type="checkbox" style="accent-color:#1890FF"/></th><th style="min-width:300px">Marker Name</th><th>Marker Type</th><th>Task Code</th><th>IDC Region</th><th>Owner</th><th>Freque...</th><th style="width:120px">Action</th></tr></thead>
-    <tbody>
-      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td style="font-size:12px;word-break:break-all;max-width:320px;">sys.data_daasprofile.hdfs://r2/projects/data_daasprofile/hive/dev_data_daasprofile/dwd_upp_manual_segment__th_continuous_s0_live_paimon_0225#...</td><td><span class="source-badge">OTHERS</span></td><td style="font-size:12px;">dwd_upp_manual_segment__reg_continuous_s0_live_paimon-TH-Dev</td><td>SG</td><td>paimon_table_service</td><td>OTHE...</td><td><a class="link" onclick="switchView('view-marker-view')">Details</a> <span style="color:#8C8C8C;font-size:12px;">Inactivate</span></td></tr>
-      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td style="font-size:12px;word-break:break-all;max-width:320px;">sys.data_usermart.hdfs://r2/projects/data_usermart/hive/mp_user/realtime/rt_dws_user_login_cnt_hi__vn_20241105/hoodie/...</td><td><span class="source-badge">OTHERS</span></td><td style="font-size:12px;">rt_dws_user_login_cnt_hi__xx_k2hd-VN</td><td>SG</td><td>hudi_table_service</td><td>OTHE...</td><td><a class="link" onclick="switchView('view-marker-view')">Details</a> <span style="color:#8C8C8C;font-size:12px;">Inactivate</span></td></tr>
-      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td style="font-size:12px;word-break:break-all;max-width:320px;">sys.data_paiddadsmart.hdfs://r2/projects/data_paiddadsmart/hive/mp_paiddads/dws_shop_item_order_ads_performance_1d__vn_s0_live#...</td><td><span class="source-badge">OTHERS</span></td><td style="font-size:12px;">2_dws_shop_item_order_ads_performance_1d-VN</td><td>SG</td><td>paimon_table_service</td><td>OTHE...</td><td><a class="link" onclick="switchView('view-marker-view')">Details</a> <span style="color:#8C8C8C;font-size:12px;">Inactivate</span></td></tr>
-      <tr><td><input type="checkbox" style="accent-color:#1890FF"/></td><td style="font-size:12px;word-break:break-all;max-width:320px;">sys.mp_cs.hdfs://o2/projects/mp_cs/hive/mp_cs/rt_dwd/rt_grp_dwd_email_record_reg_20250526/hoodie/...</td><td><span class="source-badge">OTHERS</span></td><td style="font-size:12px;">us_dwd_email_record__reg_k2hd</td><td>SG</td><td>hudi_table_service</td><td>OTHE...</td><td><a class="link" onclick="switchView('view-marker-view')">Details</a> <span style="color:#8C8C8C;font-size:12px;">Inactivate</span></td></tr>
-    </tbody>
+    <tbody id="marker-search-tbody"></tbody>
   </table>
+  <div class="pagination"><div class="pg-left"><button class="btn-outline" style="font-size:12px;padding:3px 10px;">Inactivate</button></div><div class="pg-right"><span id="marker-search-count">0 Search Results</span><button class="pg-btn disabled">&lt;</button><button class="pg-btn active">1</button><button class="pg-btn disabled">&gt;</button><span>10/page</span></div></div>
 </div>
 
 <!-- VIEW 10: Marker View -->
 <div class="left-view" id="view-marker-view">
   <div class="pg-breadcrumb"><a onclick="switchView('view-marker-search')">Marker Search</a> / <strong>Marker View</strong></div>
-  <div style="padding:8px 24px 0;font-size:13px;color:#595959;word-break:break-all;">sys.data_daasprofile.hdfs://r2/projects/data_daasprofile/hive/data_daasprofile/dwd_upp_realtime_tag__mx_conti... <span style="color:#8C8C8C;font-size:12px;">Business Time (UTC+8) ⓘ</span> <input class="filter-input" value="2026-03-28 00:00:00" style="width:140px;margin-left:4px;"/> → End date</div>
+  <div style="padding:8px 24px 0;font-size:13px;color:#595959;word-break:break-all;"><strong id="marker-view-name" style="font-size:18px;color:#262626;"></strong> <span style="color:#8C8C8C;font-size:12px;">Business Time (UTC+8) ⓘ</span> <input class="filter-input" id="marker-view-business-time" value="2026-03-28 00:00:00" style="width:140px;margin-left:4px;"/> → End date</div>
   <div class="pg-meta" style="flex-wrap:wrap;gap:12px;">
-    <span class="pg-meta-item">Marker Type: <span class="source-badge">OTHERS</span></span>
-    <span class="pg-meta-item">IDC Region: <span style="color:#333">SG</span></span>
-    <span class="pg-meta-item">Frequency: <span class="source-badge" style="background:#F0F0F0;color:#333;border-color:#D9D9D9;">OTHER</span></span>
-    <span class="pg-meta-item">Status: <span class="status-badge success">Active</span></span>
-    <span class="pg-meta-item">Scope: <span style="color:#333">External</span></span>
+    <span class="pg-meta-item">Marker Type: <span class="source-badge" id="marker-view-type">OTHERS</span></span>
+    <span class="pg-meta-item">IDC Region: <span style="color:#333" id="marker-view-region">USEAST</span></span>
+    <span class="pg-meta-item">Frequency: <span class="source-badge" id="marker-view-frequency" style="background:#F0F0F0;color:#333;border-color:#D9D9D9;">MINUTELY</span></span>
+    <span class="pg-meta-item">Status: <span class="status-badge success" id="marker-view-status">Active</span></span>
+    <span class="pg-meta-item">Scope: <span style="color:#333" id="marker-view-scope">Internal</span></span>
   </div>
   <div class="pg-meta" style="flex-wrap:wrap;gap:12px;border-bottom:1px solid #F0F0F0;padding-bottom:12px;">
-    <span class="pg-meta-item">Task Code: <span style="color:#333">dwd_upp_realtime_tag__mx_continuous_s0_live</span></span>
-    <span class="pg-meta-item">Owner: <span style="color:#333">hudi_table_service</span></span>
-    <span class="pg-meta-item">Create Time: <span style="color:#333">2026-04-03 14:38:23</span></span>
-    <span class="pg-meta-item">System Name: <span style="color:#333">hudi_table_service</span></span>
+    <span class="pg-meta-item">Task Code: <span style="color:#333" id="marker-view-task-code">dwd_upp_realtime_tag__mx_continuous_s0_live</span></span>
+    <span class="pg-meta-item">Owner: <span style="color:#333" id="marker-view-owner">hudi_table_service</span></span>
+    <span class="pg-meta-item">Create Time: <span style="color:#333" id="marker-view-create-time">2026-04-03 14:38:23</span></span>
+    <span class="pg-meta-item">System Name: <span style="color:#333" id="marker-view-system-name">hudi_table_service</span></span>
   </div>
   <div style="flex:1;padding:24px;overflow-y:auto;">
-    <div style="height:180px;background:#FAFAFA;border:1px solid #F0F0F0;border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:20px;position:relative;">
-      <div style="position:absolute;left:8px;top:50%;transform:translateY(-50%);writing-mode:vertical-rl;text-orientation:mixed;font-size:11px;color:#8C8C8C;transform:rotate(180deg);writing-mode:vertical-rl;">Update Time</div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-        <div style="font-size:11px;color:#8C8C8C;">02:38:23 PM</div>
-        <div style="width:4px;height:4px;background:#1890FF;border-radius:50%;"></div>
-        <div style="font-size:10px;color:#BFBFBF;">03/04/2026 14:38:22</div>
-      </div>
-      <div style="position:absolute;bottom:8px;right:50%;font-size:11px;color:#8C8C8C;">Business Time</div>
-    </div>
+    <div id="marker-view-chart" style="height:180px;background:#FAFAFA;border:1px solid #F0F0F0;border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:20px;position:relative;"></div>
     <table class="data-table">
       <thead><tr><th style="width:36px">+</th><th>Offset ⓘ</th><th style="width:36px"><input type="checkbox" style="accent-color:#1890FF"/></th><th>Business Time ↕</th><th>Update Time ↕</th><th>Status</th><th>Action</th></tr></thead>
-      <tbody>
-        <tr><td>+</td><td></td><td><input type="checkbox" style="accent-color:#1890FF"/></td><td>2026-04-03 14:38:22</td><td>2026-04-03 14:38:23</td><td>Create</td><td><a class="link">Consumers</a> <span style="color:#8C8C8C;cursor:pointer;">Delete</span></td></tr>
-      </tbody>
+      <tbody id="marker-view-tbody"></tbody>
     </table>
-    <div class="pagination"><div class="pg-left"><button class="btn-outline" style="font-size:12px;padding:3px 10px;">Delete</button></div><div class="pg-right"><span>1 Search Results</span><button class="pg-btn disabled">&lt;</button><button class="pg-btn active">1</button><button class="pg-btn disabled">&gt;</button><span>10/page</span></div></div>
+    <div class="pagination"><div class="pg-left"><button class="btn-outline" style="font-size:12px;padding:3px 10px;">Delete</button></div><div class="pg-right"><span id="marker-view-count">0 Search Results</span><button class="pg-btn disabled">&lt;</button><button class="pg-btn active">1</button><button class="pg-btn disabled">&gt;</button><span>10/page</span></div></div>
   </div>
 </div>
 
@@ -911,7 +897,7 @@
     <div class="session-tab-bar" id="sessionTabBar">
       <div class="stb-tabs" id="sessionTabs"></div>
       <div class="stb-actions">
-        <button type="button" class="stb-btn stb-more-btn" id="stbMoreBtn" title="More tabs" style="display:none" onclick="toggleMoreTabs()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
+        <button type="button" class="stb-btn stb-more-btn" id="stbMoreBtn" title="More tabs" style="display:none" onclick="toggleMoreTabs()"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18" cy="12" r="1.8"/></svg></button>
         <button type="button" class="stb-btn" title="New Chat" onclick="createNewSession()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m-7-7h14"/></svg></button>
         <button type="button" class="stb-btn" title="Chat History" onclick="toggleSessionList()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></button>
       </div>
@@ -1009,7 +995,7 @@
           </div>
           <div class="resp-section" style="border-bottom:none;">
             <div class="link-btns">
-              <button type="button" class="link-btn" onclick="triggerDynRerun('preset-rerun','update_table','di_scheduler.studio_6801187_20260403_DAY_2')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>Rerun This Instance</button>
+              <button type="button" class="link-btn" id="preset-rerun" onclick="triggerDynRerun('preset-rerun','update_table','di_scheduler.studio_6801187_20260403_DAY_2')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>Rerun This Instance</button>
               <button type="button" class="link-btn" onclick="linkTo('view-syslog',null,{taskName:'update_table',instanceId:'di_scheduler.studio_6801187_20260403_DAY_2'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>View System Log</button>
               <button type="button" class="link-btn" onclick="linkTo('view-code',null,{taskName:'update_table',instanceId:'di_scheduler.studio_6801187_20260403_DAY_2'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>View Code</button>
               <button type="button" class="link-btn" onclick="linkTo('view-detail',null,{taskName:'update_table',instanceId:'di_scheduler.studio_6801187_20260403_DAY_2'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>View Instance Details</button>
@@ -1093,6 +1079,8 @@
       </div>
     </div>
   </div>
+
+  <div class="kill-action-dock hidden" id="killActionDock"></div>
 
   <div class="input-area">
     <div class="shortcut-bar">

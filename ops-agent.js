@@ -546,6 +546,8 @@ function getSessionIcon(intentType) {
 let isFloating = false;
 let floatDrag = { on: false, dx: 0, dy: 0 };
 let resizeDrag = { on: false, startX: 0, startW: 420 };
+let pendingKillOperation = null;
+let pendingActionShortcutSource = null;
 
 const PRI_ARROW = { P1: '⇌ 1', P2: '⇌ 2', P3: '⇌ 3', P4: '⇌ 4', P5: '⇌ 5' };
 const PRI_LABEL = { P1: 'Lowest', P2: 'Low', P3: 'Medium', P4: 'High', P5: 'Highest' };
@@ -687,6 +689,189 @@ function getSkipDependencyRequestState(text, ctx) {
   };
 }
 
+function buildSkipInputMarker(taskName, instanceId) {
+  var studioTokenMatch = (instanceId || '').match(/studio_\d+/);
+  var studioToken = studioTokenMatch ? studioTokenMatch[0] : 'studio_unknown';
+  return 'useast#' + taskName + '.' + studioToken;
+}
+
+function getInputMarkerTaskCode(taskName, instanceId) {
+  var studioTokenMatch = (instanceId || '').match(/studio_(\d+)/);
+  var studioDigits = studioTokenMatch ? studioTokenMatch[1] : 'unknown';
+  return taskName + '.studio_' + studioDigits;
+}
+
+function formatOwnerName(ownerEmail) {
+  return (ownerEmail || '').replace(/@.*$/, '') || '-';
+}
+
+function formatMarkerStatus(instanceStatus) {
+  return instanceStatus === 'Failed' ? 'Inactive' : 'Active';
+}
+
+function formatMarkerDate(date) {
+  var y = date.getFullYear();
+  var m = String(date.getMonth() + 1).padStart(2, '0');
+  var d = String(date.getDate()).padStart(2, '0');
+  var hh = String(date.getHours()).padStart(2, '0');
+  var mm = String(date.getMinutes()).padStart(2, '0');
+  var ss = String(date.getSeconds()).padStart(2, '0');
+  return y + '-' + m + '-' + d + ' ' + hh + ':' + mm + ':' + ss;
+}
+
+function buildMarkerHistoryEntries(instanceId) {
+  var bizDate = extractInstanceBizDate(instanceId) || '20260403';
+  var yyyy = Number(bizDate.slice(0, 4));
+  var mm = Number(bizDate.slice(4, 6)) - 1;
+  var dd = Number(bizDate.slice(6, 8));
+  var offsets = ['1745', '1700', '1615', '1530', '1445', '1400'];
+  return offsets.map(function(offset, index) {
+    var hours = Number(offset.slice(0, 2));
+    var minutes = Number(offset.slice(2, 4));
+    var businessTime = new Date(yyyy, mm, dd, hours, minutes, 0);
+    var updateTime = new Date(businessTime.getTime() + (index + 1) * 9 * 60000 + 37000);
+    return {
+      offset: bizDate + offset,
+      businessTime: formatMarkerDate(businessTime),
+      updateTime: formatMarkerDate(updateTime),
+      status: 'Create'
+    };
+  });
+}
+
+function buildMarkerRecord(instanceId) {
+  var inst = INSTANCES[instanceId];
+  if (!inst) return null;
+  var taskName = inst.task;
+  var taskMeta = TASKS[taskName] || {};
+  var inputMarker = buildSkipInputMarker(taskName, instanceId);
+  var taskCode = getInputMarkerTaskCode(taskName, instanceId);
+  var bizDate = extractInstanceBizDate(instanceId) || '20260403';
+  var baseDate = new Date(Number(bizDate.slice(0, 4)), Number(bizDate.slice(4, 6)) - 1, Number(bizDate.slice(6, 8)), 0, 0, 0);
+  var createTime = new Date(baseDate.getTime() + 2 * 3600000 + 38 * 60000 + 11 * 1000);
+  return {
+    name: inputMarker,
+    taskName: taskName,
+    taskCode: taskCode,
+    taskInstanceCode: instanceId,
+    markerType: 'OTHERS',
+    region: 'USEAST',
+    frequency: 'MINUTELY',
+    status: formatMarkerStatus(inst.status),
+    scope: 'Internal',
+    owner: formatOwnerName(taskMeta.owner),
+    createTime: formatMarkerDate(createTime),
+    systemName: 'suit-scheduler',
+    businessTime: formatMarkerDate(baseDate),
+    history: buildMarkerHistoryEntries(instanceId)
+  };
+}
+
+function getInputMarkerRecords() {
+  return Object.keys(INSTANCES).map(buildMarkerRecord).filter(Boolean).sort(function(a, b) {
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function getInputMarkerRecordByName(name) {
+  var records = getInputMarkerRecords();
+  for (var i = 0; i < records.length; i++) {
+    if (records[i].name === name) return records[i];
+  }
+  return null;
+}
+
+function renderMarkerSearchTable() {
+  var tbody = document.getElementById('marker-search-tbody');
+  var countEl = document.getElementById('marker-search-count');
+  if (!tbody) return;
+  var records = getInputMarkerRecords();
+  tbody.innerHTML = records.map(function(record) {
+    return '<tr>' +
+      '<td><input type="checkbox" style="accent-color:#1890FF"/></td>' +
+      '<td style="font-size:12px;word-break:break-all;max-width:320px;">' + record.name + '</td>' +
+      '<td><span class="source-badge">' + record.markerType + '</span></td>' +
+      '<td style="font-size:12px;">' + record.taskCode + '</td>' +
+      '<td>' + record.region + '</td>' +
+      '<td>' + record.owner + '</td>' +
+      '<td>' + record.frequency + '</td>' +
+      '<td><a class="link" onclick="navToMarker(\'' + record.name + '\')">Details</a> <span style="color:#8C8C8C;font-size:12px;">Inactivate</span></td>' +
+      '</tr>';
+  }).join('');
+  if (countEl) countEl.textContent = records.length + ' Search Results';
+}
+
+function renderMarkerViewChart(record) {
+  var chart = document.getElementById('marker-view-chart');
+  if (!chart || !record) return;
+  var points = [];
+  for (var i = 0; i < record.history.length; i++) {
+    var x = 70 + i * 230;
+    var y = 145 - (i % 2 === 0 ? 105 : 65) - Math.floor(i / 2) * 4;
+    points.push(x + ',' + y);
+  }
+  var labels = record.history.map(function(entry, index) {
+    return '<div style="position:absolute;bottom:8px;left:' + (56 + index * 230) + 'px;font-size:11px;color:#8C8C8C;">' + entry.businessTime.slice(5, 16).replace(' ', '<br/>') + '</div>';
+  }).join('');
+  chart.innerHTML =
+    '<div style="position:absolute;left:8px;top:50%;transform:translateY(-50%) rotate(180deg);writing-mode:vertical-rl;text-orientation:mixed;font-size:11px;color:#8C8C8C;">Update Time</div>' +
+    '<svg width="100%" height="100%" viewBox="0 0 1600 180" preserveAspectRatio="none">' +
+    '<line x1="70" y1="30" x2="70" y2="150" stroke="#E8E8E8" stroke-width="1"/>' +
+    '<line x1="70" y1="150" x2="1530" y2="150" stroke="#E8E8E8" stroke-width="1"/>' +
+    '<polyline fill="none" stroke="#5B8FF9" stroke-width="2" points="' + points.join(' ') + '"/>' +
+    points.map(function(point) {
+      var parts = point.split(',');
+      return '<circle cx="' + parts[0] + '" cy="' + parts[1] + '" r="3" fill="#5B8FF9"/>';
+    }).join('') +
+    '</svg>' +
+    labels +
+    '<div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:11px;color:#8C8C8C;">Business Time</div>';
+}
+
+function updateMarkerView(markerName) {
+  var record = getInputMarkerRecordByName(markerName) || getInputMarkerRecords()[0];
+  if (!record) return;
+  var nameEl = document.getElementById('marker-view-name');
+  var businessTimeEl = document.getElementById('marker-view-business-time');
+  var typeEl = document.getElementById('marker-view-type');
+  var regionEl = document.getElementById('marker-view-region');
+  var frequencyEl = document.getElementById('marker-view-frequency');
+  var statusEl = document.getElementById('marker-view-status');
+  var scopeEl = document.getElementById('marker-view-scope');
+  var taskCodeEl = document.getElementById('marker-view-task-code');
+  var ownerEl = document.getElementById('marker-view-owner');
+  var createTimeEl = document.getElementById('marker-view-create-time');
+  var systemNameEl = document.getElementById('marker-view-system-name');
+  var tbody = document.getElementById('marker-view-tbody');
+  var countEl = document.getElementById('marker-view-count');
+  if (nameEl) nameEl.textContent = record.name;
+  if (businessTimeEl) businessTimeEl.value = record.businessTime;
+  if (typeEl) typeEl.textContent = record.markerType;
+  if (regionEl) regionEl.textContent = record.region;
+  if (frequencyEl) frequencyEl.textContent = record.frequency;
+  if (scopeEl) scopeEl.textContent = record.scope;
+  if (taskCodeEl) taskCodeEl.textContent = record.taskCode;
+  if (ownerEl) ownerEl.textContent = record.owner;
+  if (createTimeEl) createTimeEl.textContent = record.createTime;
+  if (systemNameEl) systemNameEl.textContent = record.systemName;
+  if (statusEl) {
+    statusEl.textContent = record.status;
+    statusEl.className = 'status-badge ' + (record.status === 'Active' ? 'success' : 'failed');
+  }
+  if (tbody) {
+    tbody.innerHTML = record.history.map(function(entry) {
+      return '<tr><td>+</td><td>' + entry.offset + '</td><td><input type="checkbox" style="accent-color:#1890FF"/></td><td>' + entry.businessTime + '</td><td>' + entry.updateTime + '</td><td>' + entry.status + '</td><td><a class="link">Consumers</a> <span style="color:#8C8C8C;cursor:pointer;">Delete</span></td></tr>';
+    }).join('');
+  }
+  if (countEl) countEl.textContent = record.history.length + ' Search Results';
+  renderMarkerViewChart(record);
+}
+
+function navToMarker(markerName) {
+  updateMarkerView(markerName);
+  switchView('view-marker-view');
+}
+
 function renderSkipDependencyTarget(target, options) {
   if (!target) return '';
   var opts = options || {};
@@ -694,16 +879,17 @@ function renderSkipDependencyTarget(target, options) {
   var checked = opts.checked ? ' checked' : '';
   var recommendedBadge = opts.recommended ? '<span class="skip-target-reco">Recommended</span>' : '';
   var checkboxHtml = checkboxId ? '<input class="skip-target-checkbox" type="checkbox" id="' + checkboxId + '" value="' + target.taskName + '"' + checked + ' onchange="syncSkipDependencySelectionState(\'' + opts.uid + '\')"/>' : '';
+  var inputMarker = buildSkipInputMarker(target.taskName, target.instanceId);
   return '<div class="skip-target-item">' +
     '<label class="skip-target-row" for="' + checkboxId + '">' +
     checkboxHtml +
     '<div class="skip-target-main">' +
     '<div class="skip-target-top">' +
-    '<span class="skip-target-name" onclick="navToTask(\'' + target.taskName + '\')">' + target.taskName + '</span>' +
+    '<span class="skip-target-name" onclick="navToMarker(\'' + inputMarker + '\')">' + inputMarker + '</span>' +
     recommendedBadge +
     '<span class="status-badge ' + statusBadgeClass(target.status) + '" style="font-size:10px;padding:0 5px;">' + target.status + '</span>' +
     '</div>' +
-    (target.instanceId ? '<div class="skip-target-inst">' + target.instanceId + '</div>' : '') +
+    (target.instanceId ? '<div class="skip-target-inst">(task instance code: <span class="skip-target-inst-link" onclick="navToInstance(\'' + target.instanceId + '\')">' + target.instanceId + '</span>)</div>' : '') +
     '</div>' +
     '</label>' +
     '</div>';
@@ -1380,6 +1566,189 @@ function confirmRerun() {
   scrollActiveConv();
 }
 
+function isKillOperationPending() {
+  return !!(pendingKillOperation && pendingKillOperation.uid);
+}
+
+function setKillInputLock(locked) {
+  var inputArea = document.querySelector('.input-area');
+  var input = document.getElementById('chatInput');
+  var sendBtn = document.querySelector('.send-btn');
+  var chips = document.querySelectorAll('.sc-chip');
+  if (inputArea) inputArea.classList.toggle('blocked-by-kill', !!locked);
+  if (input) {
+    input.disabled = !!locked;
+    if (locked) input.blur();
+  }
+  if (sendBtn) sendBtn.disabled = !!locked;
+  chips.forEach(function(chip) { chip.disabled = !!locked; });
+}
+
+function syncAgentMessageHtmlFromElement(el, sessionId) {
+  if (!el) return;
+  var msgNode = el.closest('.msg.agent');
+  var body = el.closest('.msg-body');
+  var conv = el.closest('.conv-container');
+  var targetSessionId = sessionId || (conv ? conv.id : SessionManager.data.activeSessionId);
+  if (!msgNode || !body || !targetSessionId) return;
+  var session = SessionManager.getSession(targetSessionId);
+  if (!session || !session.messages) return;
+  var domAgents = Array.prototype.slice.call(conv ? conv.querySelectorAll('.msg.agent') : []);
+  var agentIndex = domAgents.indexOf(msgNode);
+  if (agentIndex < 0) return;
+  var seen = -1;
+  for (var i = 0; i < session.messages.length; i++) {
+    if (session.messages[i].role !== 'agent') continue;
+    seen += 1;
+    if (seen === agentIndex) {
+      session.messages[i].html = body.innerHTML;
+      SessionManager.save();
+      return;
+    }
+  }
+}
+
+function markActionShortcutCompleted(buttonId, sessionId, executedText) {
+  if (!buttonId) return;
+  var btn = document.getElementById(buttonId);
+  if (!btn) return;
+  btn.disabled = true;
+  btn.setAttribute('aria-disabled', 'true');
+  btn.classList.add('op-executed');
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M20 6L9 17l-5-5"/></svg>' + (executedText || 'Executed');
+  syncAgentMessageHtmlFromElement(btn, sessionId);
+}
+
+function triggerActionShortcut(opType, buttonId, taskName, instanceId, promptText, executedText) {
+  var btn = document.getElementById(buttonId);
+  if (btn && (btn.disabled || btn.classList.contains('op-executed'))) return;
+  if (isKillOperationPending()) {
+    showToast('Please confirm or cancel the pending action first.');
+    return;
+  }
+  pendingActionShortcutSource = {
+    opType: opType || '',
+    buttonId: buttonId || '',
+    sessionId: SessionManager.data.activeSessionId || null,
+    taskName: taskName || '',
+    instanceId: instanceId || '',
+    executedText: executedText || 'Executed'
+  };
+  simulateSendWithText(promptText || '');
+}
+
+function triggerDynRerun(buttonId, name, inst) {
+  var promptText = inst ? 'Rerun instance ' + inst : 'Rerun instance ';
+  if (buttonId && document.getElementById(buttonId)) {
+    triggerActionShortcut('op_rerun', buttonId, name, inst, promptText, 'Rerun Submitted');
+    return;
+  }
+  simulateSendWithText(promptText);
+}
+
+function closeKillActionDock(uid) {
+  if (uid && pendingKillOperation && pendingKillOperation.uid !== uid) return;
+  pendingKillOperation = null;
+  var dock = document.getElementById('killActionDock');
+  var activeConv = document.querySelector('.conv-container.active');
+  if (activeConv) activeConv.classList.remove('kill-dock-open');
+  if (dock) {
+    dock.innerHTML = '';
+    dock.classList.add('hidden');
+  }
+  setKillInputLock(false);
+}
+
+function scheduleKillActionDockClose(uid) {
+  if (!pendingKillOperation || pendingKillOperation.uid !== uid) return;
+  window.setTimeout(function() {
+    closeKillActionDock(uid);
+  }, 450);
+}
+
+function openKillActionDock(payload) {
+  var dock = document.getElementById('killActionDock');
+  var activeConv = document.querySelector('.conv-container.active');
+  if (!dock || !payload || !payload.uid) return;
+  pendingKillOperation = {
+    uid: payload.uid,
+    opLabel: payload.opLabel || 'Operation',
+    sessionId: SessionManager.data.activeSessionId || null,
+    taskName: payload.taskName || '',
+    taskCode: payload.taskCode || '',
+    instanceId: payload.instanceId || '',
+    level: payload.level || '',
+    sourceButtonId: payload.sourceButtonId || '',
+    sourceSessionId: payload.sourceSessionId || null
+  };
+  if (activeConv) activeConv.classList.add('kill-dock-open');
+  dock.innerHTML = '<div class="kill-action-shell">' + payload.dockHtml + '</div>';
+  dock.classList.remove('hidden');
+  setKillInputLock(true);
+  scrollActiveConv();
+}
+
+function updateLastAgentMessage(sessionId, content, html) {
+  var targetSessionId = sessionId || SessionManager.data.activeSessionId;
+  var session = SessionManager.getSession(targetSessionId);
+  if (!session || !session.messages || session.messages.length === 0) return;
+  for (var i = session.messages.length - 1; i >= 0; i--) {
+    if (session.messages[i].role === 'agent') {
+      session.messages[i].content = String(content || '');
+      if (html) session.messages[i].html = html;
+      session.lastPreview = String(content || '').replace(/<[^>]*>/g, '').substring(0, 60);
+      session.updatedAt = new Date().toISOString();
+      SessionManager.save();
+      return;
+    }
+  }
+}
+
+function syncKillInlineMessage(uid, content) {
+  var inline = document.getElementById(uid + '-kill-inline');
+  if (!inline) return;
+  var body = inline.closest('.msg-body');
+  if (!body) return;
+  updateLastAgentMessage(pendingKillOperation && pendingKillOperation.sessionId, content, body.innerHTML);
+}
+
+function renderPinnedInlinePending(uid, opLabel) {
+  return '<div class="response-wrap" id="' + uid + '-kill-inline"><div class="msg-bubble" style="border:none;padding:10px 14px;">' + opLabel + ' confirmation is pinned at the bottom. Please <strong>confirm</strong> or <strong>cancel</strong> before sending the next message.</div></div>';
+}
+
+function renderPinnedInlineCancelled(uid, opLabel) {
+  return '<div class="response-wrap" id="' + uid + '-kill-inline"><div class="msg-bubble" style="border:none;padding:10px 14px;">' + opLabel + ' operation cancelled.</div></div>';
+}
+
+function renderPinnedInlineSuccess(uid, opLabel, taskName, taskCode, instanceId, successText) {
+  return '<div class="response-wrap" id="' + uid + '-kill-inline"><div class="msg-bubble" style="border:none;padding:0 0 8px;">' + successText + '</div>' +
+    '<div class="r-card"><div class="ac-body"><div class="ac-params">' +
+    '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + taskName + '</span></div>' +
+    '<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
+    '<div class="ac-row"><span class="ac-key">Task Instance Code</span><span class="ac-val" style="font-size:11px;">' + instanceId + '</span></div>' +
+    '<div class="ac-done confirmed" style="margin-top:2px;"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">Submitted successfully</div></div><a class="acd-link" onclick="linkTo(\'view-detail\',null,{taskName:\'' + taskName + '\',instanceId:\'' + instanceId + '\'})">View Instance Details →</a></div>' +
+    '</div></div></div></div>';
+}
+
+function renderPinnedInlineTaskSuccess(uid, opLabel, taskName, taskCode, successText) {
+  return '<div class="response-wrap" id="' + uid + '-kill-inline"><div class="msg-bubble" style="border:none;padding:0 0 8px;">' + successText + '</div>' +
+    '<div class="r-card"><div class="ac-body"><div class="ac-params">' +
+    '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + taskName + '</span></div>' +
+    '<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
+    '<div class="ac-done confirmed" style="margin-top:2px;"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">Submitted successfully</div></div><a class="acd-link" onclick="linkTo(\'view-taskview-matrix\',null,{taskName:\'' + taskName + '\'})">View Task Details →</a></div>' +
+    '</div></div></div></div>';
+}
+
+function renderPinnedInlineRerunSuccess(uid, taskName, taskCode, instanceId, eventName, successText) {
+  return '<div class="response-wrap" id="' + uid + '-kill-inline"><div class="msg-bubble" style="border:none;padding:0 0 8px;">' + successText + '</div>' +
+    '<div class="r-card"><div class="ac-body"><div class="ac-params">' +
+    '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + taskName + '</span></div>' +
+    '<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
+    '<div class="ac-row"><span class="ac-key">Task Instance Code</span><span class="ac-val" style="font-size:11px;">' + instanceId + '</span></div>' +
+    '<div class="ac-done confirmed" style="margin-top:2px;"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">Submitted successfully</div></div><a class="acd-link" onclick="navToRerunEvent(\'' + taskName + '\',\'' + eventName + '\')">View Execution Details →</a></div>' +
+    '</div></div></div></div>';
+}
+
 function cancelOperation(uid) {
   const btns = document.getElementById(uid + '-btns');
   if (btns && btns.classList.contains('disabled')) return;
@@ -1390,6 +1759,13 @@ function cancelOperation(uid) {
   if (warning) warning.style.display = 'none';
   if (btns) btns.innerHTML = '<div class="ac-done cancelled"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8C8C" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div><div class="acd-text">Operation Cancelled</div></div>';
   showToast('Operation Cancelled');
+  if (pendingKillOperation && pendingKillOperation.uid === uid) {
+    var cancelledHtml = renderPinnedInlineCancelled(uid, pendingKillOperation.opLabel || 'Operation');
+    var inline = document.getElementById(uid + '-kill-inline');
+    if (inline) inline.outerHTML = cancelledHtml;
+    syncKillInlineMessage(uid, (pendingKillOperation.opLabel || 'Operation') + ' operation cancelled.');
+  }
+  scheduleKillActionDockClose(uid);
   scrollActiveConv();
 }
 
@@ -2514,7 +2890,7 @@ function genDiagnosisFailure(ctx) {
 '<div class="code-block"><div class="cb-header"><span>Spark SQL</span><div class="cb-actions"><button type="button" class="cb-act" onclick="copyCode(this)">Copy</button><button type="button" class="cb-act" onclick="insertCode(this)">Insert to Editor</button></div></div>' +
 '<pre class="cb-code"><span class="cm">-- salting mitigates COLLECT_LIST skew</span>\n<span class="kw">WITH</span> salted <span class="kw">AS</span> (\n  <span class="kw">SELECT</span> <span class="fn">concat</span>(<span class="kw">cast</span>(user_id <span class="kw">AS STRING</span>), <span class="str">\'_\'</span>, <span class="fn">cast</span>(<span class="fn">floor</span>(<span class="fn">rand</span>() * <span class="num">8</span>) <span class="kw">AS STRING</span>)) <span class="kw">AS</span> user_salt,\n         order_id, amt, ...\n  <span class="kw">FROM</span> ods_raw_order_data\n  <span class="kw">WHERE</span> dt = <span class="str">\'2026-04-03\'</span>\n)\n<span class="kw">SELECT</span> user_id, <span class="fn">collect_list</span>(<span class="fn">struct</span>(order_id, amt)) ...\n<span class="kw">FROM</span> salted\n<span class="kw">GROUP BY</span> user_salt;</pre></div></div>' +
 '<div class="resp-section" style="border-bottom:none;"><div class="link-btns">' +
-'<button type="button" class="link-btn" onclick="triggerDynRerun(\'' + uid + '\',\'' + name + '\',\'' + inst + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>Rerun This Instance</button>' +
+'<button type="button" class="link-btn" id="' + uid + '-rerun-shortcut" onclick="triggerDynRerun(\'' + uid + '-rerun-shortcut\',\'' + name + '\',\'' + inst + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>Rerun This Instance</button>' +
 '<button type="button" class="link-btn" onclick="linkTo(\'view-syslog\',null,{taskName:\'' + name + '\',instanceId:\'' + inst + '\'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>View System Log</button>' +
 '<button type="button" class="link-btn" onclick="linkTo(\'view-code\',null,{taskName:\'' + name + '\',instanceId:\'' + inst + '\'},true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>View Code</button>' +
 '<button type="button" class="link-btn" onclick="linkTo(\'view-detail\',null,{taskName:\'' + name + '\',instanceId:\'' + inst + '\'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>View Instance Details</button>' +
@@ -2524,6 +2900,7 @@ function genDiagnosisFailure(ctx) {
 function genDiagnosisSlow(ctx) {
   const name = ctx.taskName || 'sync_user_data';
   const inst = ctx.instanceId || 'di_scheduler.studio_8050119_20260403_DAY_1';
+  const killShortcutId = 'kill-shortcut-' + Date.now();
   return '<div class="response-wrap">' +
 '<div class="msg-bubble" style="border:none;background:transparent;padding:8px 14px 6px;">Instance <strong>' + inst + '</strong> (' + name + ') has abnormally long runtime, currently still <span class="status-badge running">Running</span>.</div>' +
 '<div class="r-card"><div class="r-card-h"><div class="r-card-ico" style="background:#FFF7E6"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FA8C16" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><span class="r-card-t">Runtime Analysis</span></div><div class="r-card-b">' +
@@ -2536,8 +2913,8 @@ function genDiagnosisSlow(ctx) {
 '</div></div></div>' +
 '<div class="resp-section">' + resourceBars() + '</div>' +
 '<div class="resp-section" style="border-bottom:none;"><div class="link-btns">' +
-'<button type="button" class="link-btn" onclick="simulateSendWithText(\'Kill instance ' + inst + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9l6 6M15 9l-6 6"/></svg>Kill This Instance</button>' +
-'<button type="button" class="link-btn" onclick="triggerDynRerun(\'' + ('dyn-s-' + Date.now()) + '\',\'' + name + '\',\'' + inst + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>Kill and Rerun</button>' +
+'<button type="button" class="link-btn" id="' + killShortcutId + '" onclick="triggerActionShortcut(\'op_kill\',\'' + killShortcutId + '\',\'' + name + '\',\'' + inst + '\',\'Kill instance ' + inst + '\',\'Kill Executed\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9l6 6M15 9l-6 6"/></svg>Kill This Instance</button>' +
+'<button type="button" class="link-btn" id="' + killShortcutId + '-rerun" onclick="triggerDynRerun(\'' + killShortcutId + '-rerun\',\'' + name + '\',\'' + inst + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>Kill and Rerun</button>' +
 '<button type="button" class="link-btn" onclick="linkTo(\'view-syslog\',null,{taskName:\'' + name + '\',instanceId:\'' + inst + '\'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg>View System Log</button>' +
 '<button type="button" class="link-btn" onclick="linkTo(\'view-code\',null,{taskName:\'' + name + '\',instanceId:\'' + inst + '\'},true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M16 18l2-2-2-2M8 18l-2-2 2-2M14 4l-4 16"/></svg>View Code</button>' +
 '<button type="button" class="link-btn" onclick="linkTo(\'view-detail\',null,{taskName:\'' + name + '\',instanceId:\'' + inst + '\'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>View Instance Details</button>' +
@@ -2547,6 +2924,7 @@ function genDiagnosisSlow(ctx) {
 function genDiagnosisWaiting(ctx) {
   const name = ctx.taskName || 'dwd_payment_detail';
   const inst = ctx.instanceId || 'di_scheduler.studio_3301987_20260403_DAY_1';
+  const skipShortcutId = 'skip-shortcut-' + Date.now();
   var upstreamName, upstreamInst, upstreamStatus, upstreamBadge, reason;
   if (name === 'dws_order_summary_daily' || inst.indexOf('studio_5512380') >= 0) {
     upstreamName = 'update_table';
@@ -2581,7 +2959,7 @@ function genDiagnosisWaiting(ctx) {
 '<div class="resp-section" style="border-bottom:none;"><div class="link-btns">' +
 '<button type="button" class="link-btn" onclick="simulateSendWithText(\'Diagnose instance ' + upstreamInst + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>Diagnose Upstream Instance</button>' +
 '<button type="button" class="link-btn" onclick="navToInstance(\'' + upstreamInst + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>View Upstream Instance</button>' +
-'<button type="button" class="link-btn" onclick="simulateSendWithText(\'Skip dependency instance ' + inst + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M5 12h14M12 5l7 7-7 7"/></svg>Skip Dependency</button>' +
+'<button type="button" class="link-btn" id="' + skipShortcutId + '" onclick="triggerActionShortcut(\'op_skip_dep\',\'' + skipShortcutId + '\',\'' + name + '\',\'' + inst + '\',\'Skip dependency instance ' + inst + '\',\'Skip Dependency Executed\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M5 12h14M12 5l7 7-7 7"/></svg>Skip Dependency</button>' +
 '<button type="button" class="link-btn" onclick="linkTo(\'view-instance-lineage\',null,{taskName:\'' + name + '\',instanceId:\'' + inst + '\'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>View Instance Lineage</button>' +
 '<button type="button" class="link-btn" onclick="linkTo(\'view-detail\',null,{taskName:\'' + name + '\',instanceId:\'' + inst + '\'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>View Instance Details</button>' +
 '</div></div></div>';
@@ -2954,6 +3332,59 @@ function buildOpSection(title, summary, content, options) {
     '</div>';
 }
 
+function setRerunStep(uid, step) {
+  var step1 = document.getElementById(uid + '-step-1');
+  var step2 = document.getElementById(uid + '-step-2');
+  var btnStep1 = document.getElementById(uid + '-step1-btns');
+  var btnStep2 = document.getElementById(uid + '-step2-btns');
+  var step1Tag = document.getElementById(uid + '-step-tag-1');
+  var step2Tag = document.getElementById(uid + '-step-tag-2');
+  var showStep1 = step !== 2;
+  if (step1) step1.style.display = showStep1 ? '' : 'none';
+  if (step2) step2.style.display = showStep1 ? 'none' : '';
+  if (btnStep1) btnStep1.style.display = showStep1 ? '' : 'none';
+  if (btnStep2) btnStep2.style.display = showStep1 ? 'none' : '';
+  if (step1Tag) step1Tag.classList.toggle('active', showStep1);
+  if (step2Tag) step2Tag.classList.toggle('active', !showStep1);
+  scrollActiveConv();
+}
+
+function buildKillOperationCard(uid, taskName, taskCode, killInst, killStatus, killStatusCls, warnSvg) {
+  return '<div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#FFF1F0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF4D4F" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div><span class="r-card-t">Operation Confirmation: Kill <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
+    '<div class="op-context-block"><div class="op-context-name">' + taskName + '</div><div class="op-context-code">' + taskCode + '</div><div class="op-context-code">' + killInst + '</div></div>' +
+    '<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Kill (Terminate)</span></div>' +
+    '<div class="ac-row"><span class="ac-key">Current Status</span><span class="ac-val"><span class="status-badge ' + killStatusCls + '" style="font-size:10px;padding:1px 8px;">' + killStatus + '</span></span></div>' +
+    '</div><div class="ac-warning" id="' + uid + '-warning" style="border-color:#FFA39E;">' + warnSvg + 'This will <strong>immediately terminate</strong> the running instance. The instance status will change to "Failed". Confirm or cancel to continue chatting.</div>' +
+    '<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" style="background:linear-gradient(135deg,#FF4D4F,#FF7875);" onclick="confirmDynGeneric(\'' + uid + '\',\'Kill\',\'' + taskName + '\',\'' + killInst + '\',\'instance\')">Confirm Kill</button></div></div></div>';
+}
+
+function genKillOperationConfirm(ctx, taskCode, warnSvg) {
+  const name = ctx.taskName || 'update_table';
+  const inst = ctx.instanceId;
+  const uid = 'dyn-' + Date.now();
+  var killInst = inst || Object.keys(INSTANCES).find(function(k) { return INSTANCES[k].task === name; }) || '';
+  var killStatus = killInst && INSTANCES[killInst] ? INSTANCES[killInst].status : 'Unknown';
+  var killStatusCls = killStatus === 'Running' ? 'running' : killStatus === 'Failed' ? 'failed' : killStatus === 'Waiting' ? 'waiting' : 'success';
+  var shortcutSource = pendingActionShortcutSource &&
+    pendingActionShortcutSource.opType === 'op_kill' &&
+    pendingActionShortcutSource.sessionId === (SessionManager.data.activeSessionId || null) &&
+    pendingActionShortcutSource.instanceId === killInst ? pendingActionShortcutSource : null;
+  pendingActionShortcutSource = null;
+  return {
+    uid: uid,
+    opType: 'op_kill',
+    opLabel: 'Kill',
+    taskName: name,
+    taskCode: taskCode,
+    instanceId: killInst,
+    sourceButtonId: shortcutSource ? shortcutSource.buttonId : '',
+    sourceSessionId: shortcutSource ? shortcutSource.sessionId : null,
+    sourceExecutedText: shortcutSource ? shortcutSource.executedText : '',
+    inlineHtml: renderPinnedInlinePending(uid, 'Kill'),
+    dockHtml: buildKillOperationCard(uid, name, taskCode, killInst, killStatus, killStatusCls, warnSvg)
+  };
+}
+
 function genOperationConfirm(intent, ctx) {
   const name = ctx.taskName || 'update_table';
   const inst = ctx.instanceId;
@@ -3030,19 +3461,39 @@ function genOperationConfirm(intent, ctx) {
       '<div class="ac-row" id="' + uid + '-concurrency-row" style="display:none;"><span class="ac-key">Concurrency</span><span class="ac-val-edit"><div class="stepper-wrap"><button type="button" class="stepper-btn" onclick="stepConcurrency(this,-1)">-</button><input class="ac-input stepper-input" type="number" value="1" min="1" max="100" onchange="validateConcurrency(this)" onblur="validateConcurrency(this)"/><button type="button" class="stepper-btn" onclick="stepConcurrency(this,1)">+</button></div><span class="ac-hint">Range 1~100</span></span></div>' +
       '<div class="ac-row" id="' + uid + '-skipdep-row"><span class="ac-key">Skip Dependency</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-skipdep" value="all"/> All</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-skipdep" value="none" checked/> None</label></span></div>' +
       '<div class="ac-row"><span class="ac-key">Skip DQC</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-dqc" value="yes"/> Yes</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-dqc" value="no" checked/> No</label></span></div>'
-    , { collapsible: true });
+    , { collapsible: true, open: true });
     var rerunNotificationSection = buildOpSection('Notifications', 'Completion summary, task alarms, and pause schedule',
       summaryRow +
       '<div class="ac-row"><span class="ac-key">Individual Task Alarms</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-alarm" value="on" checked/> On</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-alarm" value="off"/> Off</label></span></div>' +
       pauseResumeHtml
-    , { collapsible: true });
+    , { collapsible: true, open: true });
 
-    return '<div class="msg-bubble">Please confirm the following rerun:</div><div class="r-card" id="' + uid + '-card" data-op="rerun"><div class="r-card-h">' + rerunIco + '<span class="r-card-t">Operation Confirmation: Rerun <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
-rerunContextSection +
-rerunExecSection +
-rerunNotificationSection +
+    var rerunShortcutSource = pendingActionShortcutSource &&
+      pendingActionShortcutSource.opType === 'op_rerun' &&
+      pendingActionShortcutSource.sessionId === (SessionManager.data.activeSessionId || null) &&
+      pendingActionShortcutSource.instanceId === (inst || '') ? pendingActionShortcutSource : null;
+    pendingActionShortcutSource = null;
+    var rerunStepHeader = '<div class="op-stepper"><span class="op-step-pill active" id="' + uid + '-step-tag-1">Step 1 · Scope</span><span class="op-step-pill" id="' + uid + '-step-tag-2">Step 2 · Settings</span></div>';
+    var rerunDockHtml = '<div class="r-card" id="' + uid + '-card" data-op="rerun"><div class="r-card-h">' + rerunIco + '<span class="r-card-t">Operation Confirmation: Rerun <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body">' + rerunStepHeader + '<div class="ac-params" id="' + uid + '-params">' +
+'<div class="op-step-panel" id="' + uid + '-step-1">' + rerunContextSection + '</div>' +
+'<div class="op-step-panel" id="' + uid + '-step-2" style="display:none;">' + rerunExecSection + rerunNotificationSection + '</div>' +
 '</div><div class="ac-warning" id="' + uid + '-warning">' + warnSvg + 'New instance(s) will be generated based on the latest submitted code version. Execution starts immediately after confirmation.</div>' +
-'<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynRerun(\'' + uid + '\',\'' + name + '\',\'' + (inst || '') + '\')">Confirm</button></div></div></div>';
+'<div class="ac-btns" id="' + uid + '-btns"><div class="op-step-actions" id="' + uid + '-step1-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="setRerunStep(\'' + uid + '\',2)">Next</button></div>' +
+'<div class="op-step-actions" id="' + uid + '-step2-btns" style="display:none;"><button type="button" class="ac-btn cancel" onclick="setRerunStep(\'' + uid + '\',1)">Back</button><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynRerun(\'' + uid + '\',\'' + name + '\',\'' + (inst || '') + '\')">Confirm</button></div></div></div></div>';
+    return {
+      uid: uid,
+      opType: 'op_rerun',
+      opLabel: 'Rerun',
+      level: 'instance',
+      taskName: name,
+      taskCode: taskCode,
+      instanceId: inst || '',
+      sourceButtonId: rerunShortcutSource ? rerunShortcutSource.buttonId : '',
+      sourceSessionId: rerunShortcutSource ? rerunShortcutSource.sessionId : null,
+      sourceExecutedText: rerunShortcutSource ? rerunShortcutSource.executedText : '',
+      inlineHtml: renderPinnedInlinePending(uid, 'Rerun'),
+      dockHtml: rerunDockHtml
+    };
   }
   if (intent.type === 'op_backfill') {
     var bfStart = intent.startDate || '2026-03-27';
@@ -3098,12 +3549,22 @@ bfNotificationSection +
   }
   if (intent.type === 'op_dqc') {
     var dqcInst = inst || Object.keys(INSTANCES).find(function(k) { return INSTANCES[k].task === name; }) || '';
-    return '<div class="msg-bubble">Please confirm the following DQC retry:</div><div class="r-card" id="' + uid + '-card" data-op="dqc"><div class="r-card-h"><div class="r-card-ico" style="background:#FFF7E6"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FA8C16" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><span class="r-card-t">Operation Confirmation: Retry DQC <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
+    var dqcDockHtml = '<div class="r-card" id="' + uid + '-card" data-op="dqc"><div class="r-card-h"><div class="r-card-ico" style="background:#FFF7E6"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FA8C16" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><span class="r-card-t">Operation Confirmation: Retry DQC <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Retry DQC</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Instance Code</span><span class="ac-val" style="font-size:11px;">' + dqcInst + '</span></div>' +
 '</div><div class="ac-warning" id="' + uid + '-warning">' + warnSvg + 'Will rerun the DQC check.</div>' +
 '<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynDQC(\'' + uid + '\',\'' + name + '\',\'' + dqcInst + '\')">Confirm</button></div></div></div>';
+    return {
+      uid: uid,
+      opType: 'op_dqc',
+      opLabel: 'Retry DQC',
+      taskName: name,
+      taskCode: taskCode,
+      instanceId: dqcInst,
+      inlineHtml: renderPinnedInlinePending(uid, 'Retry DQC'),
+      dockHtml: dqcDockHtml
+    };
   }
   const opMap = { op_freeze: 'Freeze', op_unfreeze: 'Unfreeze', op_kill: 'Kill', op_priority: 'Adjust Priority', op_alarm: 'Alarm', op_mark_success: 'Mark Success', op_trigger_now: 'Trigger Now' };
   const opn = opMap[intent.type] || 'Operation';
@@ -3140,7 +3601,7 @@ bfNotificationSection +
         '</span></div>';
       freezeWarnMsg = 'After freezing, this task will no longer be scheduled. <strong>' + activeFreezeInsts.length + '</strong> running/waiting instance' + (activeFreezeInsts.length > 1 ? 's are' : ' is') + ' still active, so please confirm whether to terminate ' + (activeFreezeInsts.length > 1 ? 'them' : 'it') + ' immediately.' + (dep.down.length > 0 ? ' Potentially <strong>' + dep.down.length + '</strong> downstream dependent tasks may also be affected.' : '');
     }
-    return '<div class="msg-bubble">Please confirm the following freeze:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F0F2F5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/></svg></div><span class="r-card-t">Operation Confirmation: Freeze task <span style="font-size:10px;background:#F0F2F5;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
+    var freezeDockHtml = '<div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F0F2F5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/></svg></div><span class="r-card-t">Operation Confirmation: Freeze task <span style="font-size:10px;background:#F0F2F5;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Freeze task (Freeze)</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
@@ -3148,6 +3609,17 @@ downHtml +
 activeInstHtml +
 '</div><div class="ac-warning" id="' + uid + '-warning">' + warnSvg + freezeWarnMsg + '</div>' +
 '<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmFreeze(\'' + uid + '\',\'' + name + '\')">Confirm</button></div></div></div>';
+    return {
+      uid: uid,
+      opType: 'op_freeze',
+      opLabel: 'Freeze',
+      level: 'task',
+      taskName: name,
+      taskCode: taskCode,
+      instanceId: '',
+      inlineHtml: renderPinnedInlinePending(uid, 'Freeze'),
+      dockHtml: freezeDockHtml
+    };
   }
   if (intent.type === 'op_priority') {
     var t = TASKS[name] || {};
@@ -3170,12 +3642,23 @@ activeInstHtml +
     '<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmPriority(\'' + uid + '\',\'' + name + '\')">Confirm</button></div></div></div>';
   }
   if (intent.type === 'op_unfreeze') {
-    return '<div class="msg-bubble">Please confirm the following unfreeze:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F6FFED"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#52C41A" stroke-width="2"><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/></svg></div><span class="r-card-t">Operation Confirmation: Unfreeze task <span style="font-size:10px;background:#F6FFED;color:#52C41A;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
+    var unfreezeDockHtml = '<div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F6FFED"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#52C41A" stroke-width="2"><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/></svg></div><span class="r-card-t">Operation Confirmation: Unfreeze task <span style="font-size:10px;background:#F6FFED;color:#52C41A;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Unfreeze task (Unfreeze)</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
 '</div><div class="ac-warning" id="' + uid + '-warning">' + warnSvg + 'After unfreezing, this task will resume normal scheduling.</div>' +
-'<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynGeneric(\'' + uid + '\',\'Unfreeze\')">Confirm</button></div></div></div>';
+'<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynGeneric(\'' + uid + '\',\'Unfreeze\',\'' + name + '\',\'\',\'task\')">Confirm</button></div></div></div>';
+    return {
+      uid: uid,
+      opType: 'op_unfreeze',
+      opLabel: 'Unfreeze',
+      level: 'task',
+      taskName: name,
+      taskCode: taskCode,
+      instanceId: '',
+      inlineHtml: renderPinnedInlinePending(uid, 'Unfreeze'),
+      dockHtml: unfreezeDockHtml
+    };
   }
   if (intent.type === 'op_skip_dep') {
     var skipInst = inst || Object.keys(INSTANCES).find(function(k) { return INSTANCES[k].task === name; }) || '';
@@ -3195,35 +3678,43 @@ activeInstHtml +
         });
       }).join('');
       var helperText = skipState.recommendedTarget
-        ? 'The diagnosed blocking upstream is preselected. Other unresolved upstreams remain optional.'
-        : 'Select one or more unresolved upstream dependencies to bypass.';
-      var selectAllText = skipCandidates.length > 1 ? '<button type="button" class="skip-select-all" id="' + uid + '-skip-select-all" onclick="toggleAllSkipDependencies(\'' + uid + '\')">Select all unresolved upstreams</button>' : '';
+        ? 'The diagnosed blocking input marker is preselected. Other unresolved input markers remain optional.'
+        : 'Select one or more unresolved input markers to bypass.';
+      var selectAllText = skipCandidates.length > 1 ? '<button type="button" class="skip-select-all" id="' + uid + '-skip-select-all" onclick="toggleAllSkipDependencies(\'' + uid + '\')">Select all unresolved input markers</button>' : '';
       skipScopeHtml =
-        '<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Upstreams to bypass</span><span class="ac-val skip-target-list-wrap">' +
+        '<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Input markers to bypass</span><span class="ac-val skip-target-list-wrap">' +
         '<div class="skip-target-toolbar">' + selectAllText + '<span class="ac-hint" style="white-space:normal;">' + helperText + '</span></div>' +
         '<div class="skip-target-list" id="' + uid + '-skip-list">' + checkboxItems + '</div>' +
         '</span></div>';
     }
-    return '<div class="msg-bubble">Please confirm the following skip dependency:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#FFF7E6"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D46B08" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div><span class="r-card-t">Operation Confirmation: Skip Dependency <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
+    var skipShortcutSource = pendingActionShortcutSource &&
+      pendingActionShortcutSource.opType === 'op_skip_dep' &&
+      pendingActionShortcutSource.sessionId === (SessionManager.data.activeSessionId || null) &&
+      pendingActionShortcutSource.instanceId === skipInst ? pendingActionShortcutSource : null;
+    pendingActionShortcutSource = null;
+    var skipDockHtml = '<div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#FFF7E6"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D46B08" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div><span class="r-card-t">Operation Confirmation: Skip Dependency <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Skip Dependency</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Instance Code</span><span class="ac-val" style="font-size:11px;">' + skipInst + '</span></div>' +
 skipScopeHtml +
 '</div><div class="ac-warning" id="' + uid + '-warning" style="border-color:#FFD591;">' + warnSvg + 'After skipping dependencies, this instance will no longer wait for upstream completion and will start immediately. <strong>Ensure missing upstream data will not affect the correctness of this task.</strong></div>' +
 '<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmSkipDependency(\'' + uid + '\',\'' + name + '\',\'' + skipInst + '\')">Confirm</button></div></div></div>';
+    return {
+      uid: uid,
+      opType: 'op_skip_dep',
+      opLabel: 'Skip Dependency',
+      taskName: name,
+      taskCode: taskCode,
+      instanceId: skipInst,
+      sourceButtonId: skipShortcutSource ? skipShortcutSource.buttonId : '',
+      sourceSessionId: skipShortcutSource ? skipShortcutSource.sessionId : null,
+      sourceExecutedText: skipShortcutSource ? skipShortcutSource.executedText : '',
+      inlineHtml: renderPinnedInlinePending(uid, 'Skip Dependency'),
+      dockHtml: skipDockHtml
+    };
   }
   if (intent.type === 'op_kill') {
-    var killInst = inst || Object.keys(INSTANCES).find(function(k) { return INSTANCES[k].task === name; }) || '';
-    var killStatus = killInst && INSTANCES[killInst] ? INSTANCES[killInst].status : 'Unknown';
-    var killStatusCls = killStatus === 'Running' ? 'running' : killStatus === 'Failed' ? 'failed' : killStatus === 'Waiting' ? 'waiting' : 'success';
-    return '<div class="msg-bubble">Please confirm the following kill:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#FFF1F0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF4D4F" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div><span class="r-card-t">Operation Confirmation: Kill <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
-'<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Kill (Terminate)</span></div>' +
-'<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
-'<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
-'<div class="ac-row"><span class="ac-key">Task Instance Code</span><span class="ac-val" style="font-size:11px;">' + killInst + '</span></div>' +
-'<div class="ac-row"><span class="ac-key">Current Status</span><span class="ac-val"><span class="status-badge ' + killStatusCls + '" style="font-size:10px;padding:1px 8px;">' + killStatus + '</span></span></div>' +
-'</div><div class="ac-warning" id="' + uid + '-warning" style="border-color:#FFA39E;">' + warnSvg + 'This will <strong>immediately terminate</strong> the running instance. The instance status will change to "Failed". This action cannot be undone.</div>' +
-'<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" style="background:linear-gradient(135deg,#FF4D4F,#FF7875);" onclick="confirmDynGeneric(\'' + uid + '\',\'Kill\',\'' + name + '\',\'' + killInst + '\',\'instance\')">Confirm Kill</button></div></div></div>';
+    return genKillOperationConfirm(ctx, taskCode, warnSvg);
   }
   if (intent.type === 'op_mark_success') {
     var msInst = inst || Object.keys(INSTANCES).find(function(k) { return INSTANCES[k].task === name && INSTANCES[k].status !== 'Successful'; }) || '';
@@ -3238,7 +3729,7 @@ skipScopeHtml +
       }
       msDownHint += '</span></div>';
     }
-    return '<div class="msg-bubble">Please confirm the following mark success:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F6FFED"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#52C41A" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><span class="r-card-t">Operation Confirmation: Mark Success <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
+    var msDockHtml = '<div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F6FFED"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#52C41A" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><span class="r-card-t">Operation Confirmation: Mark Success <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Mark Success</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
@@ -3247,6 +3738,16 @@ skipScopeHtml +
 msDownHint +
 '</div><div class="ac-warning" id="' + uid + '-warning" style="border-color:#FFD591;">' + warnSvg + 'This will forcibly mark the instance as <strong>Successful</strong> without actual execution. Downstream tasks that depend on this instance will be unblocked. <strong>Ensure the output data is correct or not needed.</strong></div>' +
 '<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynGeneric(\'' + uid + '\',\'Mark Success\',\'' + name + '\',\'' + msInst + '\',\'instance\')">Confirm</button></div></div></div>';
+    return {
+      uid: uid,
+      opType: 'op_mark_success',
+      opLabel: 'Mark Success',
+      taskName: name,
+      taskCode: taskCode,
+      instanceId: msInst,
+      inlineHtml: renderPinnedInlinePending(uid, 'Mark Success'),
+      dockHtml: msDockHtml
+    };
   }
   if (intent.type === 'op_trigger_now') {
     var tnInst = Object.keys(INSTANCES).find(function(k) { return INSTANCES[k].task === name; }) || '';
@@ -3265,7 +3766,7 @@ msDownHint +
     var tnWarnMsg = tnHasRun
       ? 'This business date instance has already been executed (status: <strong>' + tnStatus + '</strong>). Trigger Now will <strong>re-execute</strong> this instance immediately with the latest code version.'
       : 'This will <strong>immediately execute</strong> the instance for today\'s business date. The instance will start without waiting for its scheduled time.';
-    return '<div class="msg-bubble">Please confirm the following trigger now:</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F0F2F5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div><span class="r-card-t">Operation Confirmation: Trigger Now <span style="font-size:10px;background:#F0F2F5;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
+    var triggerDockHtml = '<div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><div class="r-card-ico" style="background:#F0F2F5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div><span class="r-card-t">Operation Confirmation: Trigger Now <span style="font-size:10px;background:#F0F2F5;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span></span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
 '<div class="ac-row"><span class="ac-key">Operation Type</span><span class="ac-val">Trigger Now</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Name</span><span class="ac-val">' + name + '</span></div>' +
 '<div class="ac-row"><span class="ac-key">Task Code</span><span class="ac-val" style="font-size:11px;">' + taskCode + '</span></div>' +
@@ -3274,6 +3775,17 @@ tnNote +
 tnScheduleOption +
 '</div><div class="ac-warning" id="' + uid + '-warning">' + warnSvg + tnWarnMsg + '</div>' +
 '<div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynGeneric(\'' + uid + '\',\'Trigger Now\',\'' + name + '\',\'\',\'task\')">Confirm</button></div></div></div>';
+    return {
+      uid: uid,
+      opType: 'op_trigger_now',
+      opLabel: 'Trigger Now',
+      level: 'task',
+      taskName: name,
+      taskCode: taskCode,
+      instanceId: '',
+      inlineHtml: renderPinnedInlinePending(uid, 'Trigger Now'),
+      dockHtml: triggerDockHtml
+    };
   }
   var levelTag = (intent.level === 'instance') ? '<span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span>' : '<span style="font-size:10px;background:#F0F2F5;color:#1890FF;padding:1px 6px;border-radius:3px;margin-left:4px;">Task Level</span>';
   return '<div class="msg-bubble">Please confirm the following ' + opn + ':</div><div class="r-card" id="' + uid + '-card" data-op="gen"><div class="r-card-h"><span class="r-card-t">Operation Confirmation: ' + opn + ' ' + levelTag + '</span></div><div class="ac-body"><div class="ac-params" id="' + uid + '-params">' +
@@ -3518,11 +4030,6 @@ function toggleCascadeRerun(uid, taskName) {
   scrollActiveConv();
 }
 
-function triggerDynRerun(uid, name, inst) {
-  const conv = document.querySelector('.conv-container.active');
-  appendAgentMsg(conv, genOperationConfirm({ type: 'op_rerun', level: 'instance' }, { taskName: name, instanceId: inst }));
-}
-
 function confirmDynRerun(uid, taskName, instId) {
   const btns = document.getElementById(uid + '-btns');
   if (btns && btns.classList.contains('disabled')) return;
@@ -3540,7 +4047,16 @@ function confirmDynRerun(uid, taskName, instId) {
   var eventName = eventInput ? eventInput.value : '';
   var linkHtml = '<a class="acd-link" onclick="navToRerunEvent(\'' + taskName + '\',\'' + eventName + '\')">View Execution Details →</a>';
   if (btns) btns.innerHTML = '<div class="ac-done confirmed"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">Submitted successfully</div><div class="acd-sub">Instance added to scheduler queue</div></div>' + linkHtml + '</div>';
+  if (pendingKillOperation && pendingKillOperation.uid === uid) {
+    var rerunTaskCode = pendingKillOperation.taskCode || ((TASKS[taskName] || {}).code || '');
+    var rerunHtml = renderPinnedInlineRerunSuccess(uid, taskName, rerunTaskCode, resolvedInst, eventName, 'Rerun submitted successfully.');
+    var rerunInline = document.getElementById(uid + '-kill-inline');
+    if (rerunInline) rerunInline.outerHTML = rerunHtml;
+    syncKillInlineMessage(uid, 'Rerun submitted successfully.');
+    markActionShortcutCompleted(pendingKillOperation.sourceButtonId, pendingKillOperation.sourceSessionId || pendingKillOperation.sessionId, pendingKillOperation.sourceExecutedText || 'Rerun Submitted');
+  }
   showToast('Submitted successfully!');
+  if (pendingKillOperation && pendingKillOperation.uid === uid) scheduleKillActionDockClose(uid);
   scrollActiveConv();
 }
 
@@ -3704,7 +4220,14 @@ function confirmDynDQC(uid, taskName, instId) {
   if (warning) warning.style.display = 'none';
   var linkHtml = instId ? '<a class="acd-link" onclick="linkTo(\'view-detail\',null,{taskName:\'' + taskName + '\',instanceId:\'' + instId + '\'})">View Instance Details →</a>' : '';
   if (btns) btns.innerHTML = '<div class="ac-done confirmed"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">Submitted successfully</div><div class="acd-sub">Re-running quality checks</div></div>' + linkHtml + '</div>';
+  if (pendingKillOperation && pendingKillOperation.uid === uid) {
+    var dqcSuccessHtml = renderPinnedInlineSuccess(uid, 'Retry DQC', taskName, pendingKillOperation.taskCode || ((TASKS[taskName] || {}).code || ''), instId, 'Retry DQC submitted successfully.');
+    var dqcInline = document.getElementById(uid + '-kill-inline');
+    if (dqcInline) dqcInline.outerHTML = dqcSuccessHtml;
+    syncKillInlineMessage(uid, 'Retry DQC submitted successfully.');
+  }
   showToast('Submitted successfully!');
+  if (pendingKillOperation && pendingKillOperation.uid === uid) scheduleKillActionDockClose(uid);
   scrollActiveConv();
 }
 
@@ -3721,8 +4244,8 @@ function syncSkipDependencySelectionState(uid) {
   var allBoxes = Array.from(list.querySelectorAll('input[type="checkbox"]'));
   var checkedCount = allBoxes.filter(function(el) { return el.checked; }).length;
   selectAllBtn.textContent = checkedCount === allBoxes.length && allBoxes.length > 0
-    ? 'All unresolved upstreams selected'
-    : 'Select all unresolved upstreams';
+    ? 'All unresolved input markers selected'
+    : 'Select all unresolved input markers';
 }
 
 function toggleAllSkipDependencies(uid) {
@@ -3760,7 +4283,15 @@ function confirmSkipDependency(uid, taskName, instId) {
   if (warning) warning.style.display = 'none';
   var linkHtml = instId ? '<a class="acd-link" onclick="linkTo(\'view-detail\',null,{taskName:\'' + taskName + '\',instanceId:\'' + instId + '\'})">View Instance Details →</a>' : '';
   if (btns) btns.innerHTML = '<div class="ac-done confirmed"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">' + summaryText + '</div></div>' + linkHtml + '</div>';
+  if (pendingKillOperation && pendingKillOperation.uid === uid) {
+    var skipSuccessHtml = renderPinnedInlineSuccess(uid, 'Skip Dependency', taskName, pendingKillOperation.taskCode || ((TASKS[taskName] || {}).code || ''), instId, 'Skip dependency submitted successfully.');
+    var skipInline = document.getElementById(uid + '-kill-inline');
+    if (skipInline) skipInline.outerHTML = skipSuccessHtml;
+    syncKillInlineMessage(uid, 'Skip dependency submitted successfully.');
+    markActionShortcutCompleted(pendingKillOperation.sourceButtonId, pendingKillOperation.sourceSessionId || pendingKillOperation.sessionId, pendingKillOperation.sourceExecutedText || 'Skip Dependency Executed');
+  }
   showToast('Submitted successfully!');
+  if (pendingKillOperation && pendingKillOperation.uid === uid) scheduleKillActionDockClose(uid);
   scrollActiveConv();
 }
 
@@ -3785,7 +4316,15 @@ function confirmFreeze(uid, taskName) {
     }
   }
   if (btns) btns.innerHTML = '<div class="ac-done confirmed"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">' + detailText + '</div></div></div>';
+  if (pendingKillOperation && pendingKillOperation.uid === uid) {
+    var freezeTaskCode = pendingKillOperation.taskCode || ((TASKS[taskName] || {}).code || '');
+    var freezeHtml = renderPinnedInlineTaskSuccess(uid, 'Freeze', taskName, freezeTaskCode, 'Freeze operation executed successfully.');
+    var freezeInline = document.getElementById(uid + '-kill-inline');
+    if (freezeInline) freezeInline.outerHTML = freezeHtml;
+    syncKillInlineMessage(uid, 'Freeze operation executed successfully.');
+  }
   showToast('Submitted successfully!');
+  if (pendingKillOperation && pendingKillOperation.uid === uid) scheduleKillActionDockClose(uid);
   scrollActiveConv();
 }
 
@@ -3802,7 +4341,31 @@ function confirmDynGeneric(uid, opName, taskName, instId, level) {
     linkHtml = '<a class="acd-link" onclick="linkTo(\'view-detail\',null,{taskName:\'' + taskName + '\',instanceId:\'' + instId + '\'})">View Instance Details →</a>';
   }
   if (btns) btns.innerHTML = '<div class="ac-done confirmed"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">Submitted successfully</div></div>' + linkHtml + '</div>';
+  if (opName === 'Kill' && pendingKillOperation && pendingKillOperation.uid === uid) {
+    var successHtml = renderPinnedInlineSuccess(uid, 'Kill', taskName, pendingKillOperation.taskCode || ((TASKS[taskName] || {}).code || ''), instId, 'Kill operation executed successfully.');
+    var inline = document.getElementById(uid + '-kill-inline');
+    if (inline) inline.outerHTML = successHtml;
+    syncKillInlineMessage(uid, 'Kill operation executed successfully.');
+    markActionShortcutCompleted(pendingKillOperation.sourceButtonId, pendingKillOperation.sourceSessionId || pendingKillOperation.sessionId, pendingKillOperation.sourceExecutedText || 'Kill Executed');
+  }
+  if (opName === 'Mark Success' && pendingKillOperation && pendingKillOperation.uid === uid) {
+    var markSuccessHtml = renderPinnedInlineSuccess(uid, 'Mark Success', taskName, pendingKillOperation.taskCode || ((TASKS[taskName] || {}).code || ''), instId, 'Mark success submitted successfully.');
+    var markInline = document.getElementById(uid + '-kill-inline');
+    if (markInline) markInline.outerHTML = markSuccessHtml;
+    syncKillInlineMessage(uid, 'Mark success submitted successfully.');
+  }
+  if ((opName === 'Unfreeze' || opName === 'Trigger Now') && pendingKillOperation && pendingKillOperation.uid === uid) {
+    var genericTaskCode = pendingKillOperation.taskCode || ((TASKS[taskName] || {}).code || '');
+    var genericSuccessText = opName === 'Unfreeze'
+      ? 'Unfreeze operation executed successfully.'
+      : 'Trigger now operation executed successfully.';
+    var genericTaskHtml = renderPinnedInlineTaskSuccess(uid, opName, taskName, genericTaskCode, genericSuccessText);
+    var genericInline = document.getElementById(uid + '-kill-inline');
+    if (genericInline) genericInline.outerHTML = genericTaskHtml;
+    syncKillInlineMessage(uid, genericSuccessText);
+  }
   showToast('Submitted successfully!');
+  if ((opName === 'Kill' || opName === 'Mark Success' || opName === 'Unfreeze' || opName === 'Trigger Now') && pendingKillOperation && pendingKillOperation.uid === uid) scheduleKillActionDockClose(uid);
   scrollActiveConv();
 }
 
@@ -4085,6 +4648,10 @@ function appendThinking(conv) {
 }
 
 function simulateSend() {
+  if (isKillOperationPending()) {
+    showToast('Please confirm or cancel the pending operation first.');
+    return;
+  }
   const input = document.getElementById('chatInput');
   const text = input.value.trim();
   if (!text) return;
@@ -4095,6 +4662,10 @@ function simulateSend() {
 }
 
 async function simulateSendWithText(text) {
+  if (isKillOperationPending()) {
+    showToast('Please confirm or cancel the pending operation first.');
+    return;
+  }
   let conv = document.querySelector('.conv-container.active');
   if (!conv || conv.id === 'conv-welcome') {
     var newSession = SessionManager.createSession();
@@ -4232,8 +4803,14 @@ async function simulateSendWithText(text) {
     SessionManager.addMessage(activeConvId, 'agent', '[view opened]', '');
   } else if (response) {
     await showProcessingSteps(conv, steps);
-    var _agentHtml = appendAgentMsg(conv, response, null, null, followUpHtml);
-    SessionManager.addMessage(activeConvId, 'agent', response || '', _agentHtml);
+    if ((intent.type === 'op_rerun' || intent.type === 'op_kill' || intent.type === 'op_dqc' || intent.type === 'op_skip_dep' || intent.type === 'op_mark_success' || intent.type === 'op_freeze' || intent.type === 'op_unfreeze' || intent.type === 'op_trigger_now') && response && typeof response === 'object' && response.inlineHtml && response.dockHtml) {
+      var _killAgentHtml = appendAgentMsg(conv, response.inlineHtml);
+      SessionManager.addMessage(activeConvId, 'agent', (response.opLabel || 'Operation') + ' confirmation opened.', _killAgentHtml);
+      openKillActionDock(response);
+    } else {
+      var _agentHtml = appendAgentMsg(conv, response, null, null, followUpHtml);
+      SessionManager.addMessage(activeConvId, 'agent', response || '', _agentHtml);
+    }
   } else {
     const thinkEl = appendThinking(conv);
     const llmResult = await getOpenEndedFallbackResponse();
@@ -4609,6 +5186,9 @@ function renderAllInstancesTable() {
 
 renderTaskListTable();
 renderAllInstancesTable();
+renderMarkerSearchTable();
+var initialMarkerRecords = getInputMarkerRecords();
+if (initialMarkerRecords.length) updateMarkerView(initialMarkerRecords[0].name);
 
 window.addEventListener('beforeunload', function () {
   SessionManager.save();
