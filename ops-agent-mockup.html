@@ -39,7 +39,7 @@
 <div class="sidebar" id="mainSidebar">
   <div class="sb-content">
     <div class="sb-title">Scheduler <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>
-    <div class="sb-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>Project Overview</div>
+    <div class="sb-item" id="nav-project-overview" onclick="switchView('view-project-overview')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>Project Overview</div>
     <div class="sb-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>Task Governance</div>
     <div class="sb-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>Workflows</div>
     <div class="sb-item active" id="nav-sched" onclick="switchView('view-tasklist')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Scheduled Tasks</div>
@@ -61,7 +61,103 @@
 <!-- LEFT CONTENT AREA -->
 <div class="left-content">
 
-<!-- VIEW 1: Scheduled Tasks List (DEFAULT) -->
+<!-- VIEW: Project Overview -->
+<div class="left-view project-overview-view" id="view-project-overview" style="display:none">
+  <div class="po-tabs" role="tablist" aria-label="Project overview tabs">
+    <button type="button" class="po-tab" data-project-tab="metrics" onclick="switchProjectOverviewTab(this)">Project Metrics</button>
+    <button type="button" class="po-tab" data-project-tab="alarm" onclick="switchProjectOverviewTab(this)">Alarm &amp; Notification</button>
+    <button type="button" class="po-tab" data-project-tab="failure" onclick="switchProjectOverviewTab(this)">Ranking by Failure Rate</button>
+    <button type="button" class="po-tab" data-project-tab="execution" onclick="switchProjectOverviewTab(this)">Ranking by Execution Time</button>
+    <button type="button" class="po-tab active" data-project-tab="resource" onclick="switchProjectOverviewTab(this)">Resource Monitor</button>
+    <button type="button" class="po-tab" data-project-tab="settings" onclick="switchProjectOverviewTab(this)">Project Settings</button>
+  </div>
+
+  <div class="po-panel" data-project-panel="resource">
+    <section class="rm-section rm-queue-section">
+      <div class="rm-section-title">Queue Resource Usage</div>
+      <div class="rm-zone-tabs" role="tablist" aria-label="Resource region">
+        <button type="button" class="rm-zone active" onclick="switchResourceRegion(this, 'SG')">SG</button>
+        <button type="button" class="rm-zone" onclick="switchResourceRegion(this, 'USEAST')">USEAST</button>
+        <button type="button" class="rm-zone" onclick="switchResourceRegion(this, 'ID_SeaMoney')">ID_SeaMoney</button>
+      </div>
+      <div class="rm-queue-grid" id="rmQueueGrid"></div>
+    </section>
+
+    <section class="rm-section">
+      <div class="rm-section-head">
+        <div class="rm-section-title">Instance Resource Queuing Time</div>
+        <div class="rm-segment" role="tablist" aria-label="Queue time dimension">
+          <button type="button" class="active" onclick="switchQueueDimension(this, 'project')">By Project</button>
+          <button type="button" onclick="switchQueueDimension(this, 'queue')">By Queue</button>
+        </div>
+      </div>
+      <div class="rm-time-toolbar">
+        <div class="rm-range-group">
+          <button type="button" class="rm-range active" onclick="switchTimeRange(this, 'Last 1 Hour')">Last 1 Hour</button>
+          <button type="button" class="rm-range" onclick="switchTimeRange(this, 'Last 1 Day')">Last 1 Day</button>
+          <button type="button" class="rm-range" onclick="switchTimeRange(this, 'Last 7 Days')">Last 7 Days</button>
+          <button type="button" class="rm-range" onclick="switchTimeRange(this, 'Last 30 Days')">Last 30 Days</button>
+        </div>
+        <div class="rm-date-range" id="rmDateRange">2026-05-20 17:27:28 ~ 2026-05-20 18:27:28</div>
+      </div>
+      <div class="rm-filter-row rm-queue-filters">
+        <label class="rm-field"><span>Task Type</span><input id="rmTaskType" type="text" placeholder="Enter Task Type" oninput="applyQueueFilters()"></label>
+        <label class="rm-field"><span>Task Priority</span><select id="rmTaskPriority" onchange="applyQueueFilters()"><option value="">Select Priority</option><option>P0</option><option>P1</option><option>P2</option><option>P3</option><option>P4</option><option>P5</option></select></label>
+        <label class="rm-field"><span>Queue Name</span><select id="rmQueueName" onchange="applyQueueFilters()"><option value="">Select Queue</option><option>regdi-live</option><option>infra</option><option>regdi-scheduled</option><option>dev</option><option>regdi-adhoc</option></select></label>
+      </div>
+      <div class="rm-percentiles">
+        <div class="rm-percentile-card"><span>P50 Queuing Time <i>?</i></span><strong id="rmP50">0 min</strong></div>
+        <div class="rm-percentile-card"><span>P90 Queuing Time <i>?</i></span><strong id="rmP90">0 min</strong></div>
+        <div class="rm-percentile-card"><span>P99 Queuing Time <i>?</i></span><strong id="rmP99">0 min</strong></div>
+      </div>
+    </section>
+
+    <section class="rm-section rm-ranking-section">
+      <div class="rm-section-head">
+        <div class="rm-section-title">Resource Usage Ranking <span class="rm-help-wrap" tabindex="0"><i class="rm-help">?</i><span class="rm-help-popover">Ranks project resource usage. Running Now shows active instances; Historical summarizes successful runs by count, avg usage, and peak usage. Use Trend for history.</span></span></div>
+        <div class="rm-ranking-tools">
+          <div class="rm-segment" role="tablist" aria-label="Ranking scope">
+            <button type="button" class="active" onclick="switchRankingScope(this, 'running')">Running Now</button>
+            <button type="button" onclick="switchRankingScope(this, 'historical')">Historical</button>
+          </div>
+          <div class="rm-segment" role="tablist" aria-label="Ranking type">
+            <button type="button" class="active" onclick="switchRankingMode(this, 'workflow')">Workflow</button>
+            <button type="button" onclick="switchRankingMode(this, 'task')">Task</button>
+          </div>
+        </div>
+      </div>
+      <div class="rm-history-toolbar hidden" id="rmHistoryToolbar">
+        <div class="rm-history-ranges">
+          <button type="button" class="active" data-history-range="7d" onclick="switchHistoryRange(this, '7d')">Last 7 Days</button>
+          <button type="button" data-history-range="30d" onclick="switchHistoryRange(this, '30d')">Last 30 Days</button>
+          <button type="button" data-history-range="custom" onclick="switchHistoryRange(this, 'custom')">Custom</button>
+          <label class="rm-history-date-field"><span>Start Date</span><div class="rm-date-picker"><input id="rmHistoryStart" class="rm-date-display" type="text" placeholder="YYYY-MM-DD" aria-label="Start Date" onclick="openDatePicker('rmHistoryStartNative')" oninput="activateCustomHistoryRange()"><button type="button" class="rm-date-trigger" aria-label="Choose start date" onclick="openDatePicker('rmHistoryStartNative')"></button><input id="rmHistoryStartNative" class="rm-date-native" type="date" onchange="syncDatePicker('rmHistoryStart', 'rmHistoryStartNative', true)"></div></label>
+          <span class="rm-history-date-join">~</span>
+          <label class="rm-history-date-field"><span>End Date</span><div class="rm-date-picker"><input id="rmHistoryEnd" class="rm-date-display" type="text" placeholder="YYYY-MM-DD" aria-label="End Date" onclick="openDatePicker('rmHistoryEndNative')" oninput="activateCustomHistoryRange()"><button type="button" class="rm-date-trigger" aria-label="Choose end date" onclick="openDatePicker('rmHistoryEndNative')"></button><input id="rmHistoryEndNative" class="rm-date-native" type="date" onchange="syncDatePicker('rmHistoryEnd', 'rmHistoryEndNative', true)"></div></label>
+        </div>
+      </div>
+      <div class="rm-filter-row rm-ranking-filters workflow" id="rmRankingFilters"></div>
+      <div class="rm-table-wrap">
+        <table class="rm-table" aria-label="Resource usage ranking">
+          <thead>
+            <tr id="rmRankingHead"></tr>
+          </thead>
+          <tbody id="rmRankingBody"></tbody>
+        </table>
+        <div class="rm-empty" id="rmRankingEmpty">
+          <div class="rm-empty-icon"><span></span></div>
+          <div>No Data</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="po-panel po-placeholder" data-project-panel="metrics" style="display:none">Project Metrics</div>
+  <div class="po-panel po-placeholder" data-project-panel="alarm" style="display:none">Alarm &amp; Notification</div>
+  <div class="po-panel po-placeholder" data-project-panel="failure" style="display:none">Ranking by Failure Rate</div>
+  <div class="po-panel po-placeholder" data-project-panel="execution" style="display:none">Ranking by Execution Time</div>
+  <div class="po-panel po-placeholder" data-project-panel="settings" style="display:none">Project Settings</div>
+</div>
 <div class="left-view active" id="view-tasklist">
   <div style="padding:16px 24px 0;font-size:16px;font-weight:600;color:#333;">Scheduled Tasks</div>
   <div class="filter-section">
@@ -1101,6 +1197,1441 @@
 
 </div><!-- /layout -->
 
+<div class="modal-overlay hidden" id="rmTrendModal" onclick="if(event.target===this)closeTrendModal()">
+  <div class="rm-trend-modal" role="dialog" aria-modal="true" aria-labelledby="rmTrendTitle">
+    <div class="rm-trend-head">
+      <div id="rmTrendTitle">Resource Usage Trend</div>
+      <button type="button" class="rm-trend-close" onclick="closeTrendModal()" aria-label="Close">×</button>
+    </div>
+    <div class="rm-trend-body">
+      <div class="rm-trend-toolbar">
+        <div class="rm-trend-target">
+          <div id="rmTrendName">${Task/workflow name}</div>
+          <span id="rmTrendSchedule">${schedule type}</span>
+        </div>
+        <div class="rm-trend-controls">
+          <button type="button" class="active" data-trend-range="week" onclick="switchTrendRange(this, 'week')">Last 1 Week</button>
+          <button type="button" data-trend-range="month" onclick="switchTrendRange(this, 'month')">Last 1 Month</button>
+          <div class="rm-date-picker rm-trend-date-picker"><input id="rmTrendStartDate" class="rm-date-display" type="text" placeholder="YYYY-MM-DD" aria-label="Start Date" onclick="openDatePicker('rmTrendStartNative')"><button type="button" class="rm-date-trigger" aria-label="Choose trend start date" onclick="openDatePicker('rmTrendStartNative')"></button><input id="rmTrendStartNative" class="rm-date-native" type="date" onchange="syncTrendDatePicker('rmTrendStartDate', 'rmTrendStartNative')"></div>
+          <span class="rm-trend-date-join">~</span>
+          <div class="rm-date-picker rm-trend-date-picker"><input id="rmTrendEndDate" class="rm-date-display" type="text" placeholder="YYYY-MM-DD" aria-label="End Date" onclick="openDatePicker('rmTrendEndNative')"><button type="button" class="rm-date-trigger" aria-label="Choose trend end date" onclick="openDatePicker('rmTrendEndNative')"></button><input id="rmTrendEndNative" class="rm-date-native" type="date" onchange="syncTrendDatePicker('rmTrendEndDate', 'rmTrendEndNative')"></div>
+        </div>
+      </div>
+      <div class="rm-chart-block">
+        <div class="rm-chart-title">Memory Utilization(GB)</div>
+        <div class="rm-bar-chart" id="rmMemoryChart"></div>
+      </div>
+      <div class="rm-chart-block">
+        <div class="rm-chart-title">VCore Utilization</div>
+        <div class="rm-bar-chart" id="rmVcoreChart"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="ops-agent.js?v=20260423v3"></script>
+<script>
+const RM_QUEUE_DATA = {
+  SG: [
+    { name: 'regdi-live', tag: 'Streaming Yarn Queue', vcores: { label: 'VCores', detail: '487 remaining (total 550)', percent: 11.45 }, memory: { label: 'memory', detail: '4978GB remaining (total 5291GB)', percent: 5.92 } },
+    { name: 'dev', tag: 'Batch Yarn Queue', vcores: { label: 'VCores', detail: '405 remaining (total 480)', percent: 15.63 }, memory: { label: 'memory', detail: '3493GB remaining (total 3840GB)', percent: 9.04 } },
+    { name: 'infra', tag: 'Batch Yarn Queue', vcores: { label: 'VCores', detail: '3475 remaining (total 6300)', percent: 44.84 }, memory: { label: 'memory', detail: '-3139GB remaining (total 22272GB)', percent: 114.09, danger: true } },
+    { name: 'regdi-adhoc', tag: 'Presto Queue', vcores: { label: 'VCores', detail: '399 remaining (total 400)', percent: 0.25 }, memory: { label: 'memory', detail: '401GB remaining (total 400GB)', percent: 0.25 } },
+    { name: 'regdi-scheduled', tag: 'Presto Queue', vcores: { label: 'VCores', detail: '1966 remaining (total 2000)', percent: 1.70 }, memory: { label: 'memory', detail: '2001GB remaining (total 2000GB)', percent: 1.70 } }
+  ],
+  USEAST: [
+    { name: 'useast-live', tag: 'Streaming Yarn Queue', vcores: { label: 'VCores', detail: '812 remaining (total 960)', percent: 15.42 }, memory: { label: 'memory', detail: '7214GB remaining (total 8192GB)', percent: 11.94 } },
+    { name: 'useast-batch', tag: 'Batch Yarn Queue', vcores: { label: 'VCores', detail: '1478 remaining (total 2200)', percent: 32.82 }, memory: { label: 'memory', detail: '11840GB remaining (total 16384GB)', percent: 27.73 } },
+    { name: 'useast-adhoc', tag: 'Presto Queue', vcores: { label: 'VCores', detail: '286 remaining (total 300)', percent: 4.67 }, memory: { label: 'memory', detail: '2700GB remaining (total 3000GB)', percent: 10.00 } }
+  ],
+  ID_SeaMoney: [
+    { name: 'id-sm-live', tag: 'Streaming Yarn Queue', vcores: { label: 'VCores', detail: '268 remaining (total 320)', percent: 16.25 }, memory: { label: 'memory', detail: '1760GB remaining (total 2048GB)', percent: 14.06 } },
+    { name: 'id-sm-batch', tag: 'Batch Yarn Queue', vcores: { label: 'VCores', detail: '912 remaining (total 1800)', percent: 49.33 }, memory: { label: 'memory', detail: '5030GB remaining (total 12288GB)', percent: 59.07 } },
+    { name: 'id-sm-presto', tag: 'Presto Queue', vcores: { label: 'VCores', detail: '196 remaining (total 200)', percent: 2.00 }, memory: { label: 'memory', detail: '1855GB remaining (total 1900GB)', percent: 2.37 } }
+  ]
+};
+
+const RM_TIME_STATS = {
+  project: {
+    'Last 1 Hour': { date: '2026-05-20 17:27:28 ~ 2026-05-20 18:27:28', p50: 0, p90: 0, p99: 0 },
+    'Last 1 Day': { date: '2026-05-19 18:27:28 ~ 2026-05-20 18:27:28', p50: 2, p90: 11, p99: 28 },
+    'Last 7 Days': { date: '2026-05-13 18:27:28 ~ 2026-05-20 18:27:28', p50: 4, p90: 18, p99: 45 },
+    'Last 30 Days': { date: '2026-04-20 18:27:28 ~ 2026-05-20 18:27:28', p50: 5, p90: 24, p99: 60 }
+  },
+  queue: {
+    'Last 1 Hour': { date: '2026-05-20 17:27:28 ~ 2026-05-20 18:27:28', p50: 1, p90: 7, p99: 19 },
+    'Last 1 Day': { date: '2026-05-19 18:27:28 ~ 2026-05-20 18:27:28', p50: 3, p90: 16, p99: 38 },
+    'Last 7 Days': { date: '2026-05-13 18:27:28 ~ 2026-05-20 18:27:28', p50: 6, p90: 25, p99: 54 },
+    'Last 30 Days': { date: '2026-04-20 18:27:28 ~ 2026-05-20 18:27:28', p50: 8, p90: 31, p99: 72 }
+  }
+};
+
+const RM_QUEUE_CASCADE_DATA = [
+  { region: 'ID_SeaMoney', queues: ['regdi-dev', 'regdi-prod', 'regdi-adhoc', 'regdi-scheduled'] },
+  { region: 'SG', queues: ['regdi-live', 'infra', 'regdi-scheduled', 'dev', 'regdi-adhoc'] },
+  { region: 'USEAST', queues: ['useast-live', 'useast-batch', 'useast-adhoc'] }
+];
+
+const RM_RANKING_DATA = {
+  workflow: [
+    {
+      name: 'etl_data_warehouse_wf',
+      code: 'di_scheduler.workflow_4501234_20260420_DAY_1',
+      owner: 'yaohua.li@shopee.com',
+      memory: 21.4,
+      memoryText: '21.4 GB',
+      vcores: 28,
+      vcoresText: '28',
+      queueType: '--',
+      queue: '--',
+      schedule: 'Daily workflow',
+      tasks: [
+        { name: 'ods_click_stream', workflowName: 'etl_data_warehouse_wf', code: 'di_scheduler.studio_7700002_20260420_DAY_1', status: 'running', owner: 'data.team@shopee.com', memory: 6.2, memoryText: '6.2 GB', vcores: 8, vcoresText: '8', queueType: 'Batch Yarn Queue', queue: 'regdi-live', schedule: 'Daily task' },
+        { name: 'dim_product_attr', workflowName: 'etl_data_warehouse_wf', code: 'di_scheduler.studio_7700005_20260420_DAY_1', status: 'running', owner: 'data.team@shopee.com', memory: 4.8, memoryText: '4.8 GB', vcores: 6, vcoresText: '6', queueType: 'Batch Yarn Queue', queue: 'regdi-live', schedule: 'Daily task' },
+        { name: 'ads_revenue_dashboard', workflowName: 'etl_data_warehouse_wf', code: 'di_scheduler.studio_7700014_20260420_DAY_1', status: 'running', owner: 'finance.team@shopee.com', memory: 5.9, memoryText: '5.9 GB', vcores: 7, vcoresText: '7', queueType: 'Batch Yarn Queue', queue: 'infra', schedule: 'Daily task' },
+        { name: 'ads_search_quality', workflowName: 'etl_data_warehouse_wf', code: 'di_scheduler.studio_7700020_20260420_DAY_1', status: 'running', owner: 'search.team@shopee.com', memory: 4.5, memoryText: '4.5 GB', vcores: 7, vcoresText: '7', queueType: 'Presto Queue', queue: 'regdi-scheduled', schedule: 'Daily task' }
+      ]
+    },
+    {
+      name: 'workflow_order_pipeline',
+      code: 'di_scheduler.workflow_6801187_20260420_DAY_1',
+      owner: 'bryann.yeapkk@shopee.com',
+      memory: 16.8,
+      memoryText: '16.8 GB',
+      vcores: 22,
+      vcoresText: '22',
+      queueType: '--',
+      queue: '--',
+      schedule: 'Daily workflow',
+      tasks: [
+        { name: 'update_table', workflowName: 'workflow_order_pipeline', code: 'di_scheduler.studio_6801187_20260420_DAY_1', status: 'running', owner: 'bryann.yeapkk@shopee.com', memory: 7.3, memoryText: '7.3 GB', vcores: 10, vcoresText: '10', queueType: 'Batch Yarn Queue', queue: 'infra', schedule: 'Daily task' },
+        { name: 'dws_order_summary_daily', workflowName: 'workflow_order_pipeline', code: 'di_scheduler.studio_5512380_20260420_DAY_1', status: 'running', owner: 'wu.chen@shopee.com', memory: 5.1, memoryText: '5.1 GB', vcores: 7, vcoresText: '7', queueType: 'Batch Yarn Queue', queue: 'infra', schedule: 'Daily task' },
+        { name: 'ads_order_report', workflowName: 'workflow_order_pipeline', code: 'di_scheduler.studio_6678901_20260420_DAY_1', status: 'running', owner: 'shanjing.lim@shopee.com', memory: 4.4, memoryText: '4.4 GB', vcores: 5, vcoresText: '5', queueType: 'Presto Queue', queue: 'regdi-scheduled', schedule: 'Daily task' }
+      ]
+    },
+    {
+      name: 'workflow_user_sync',
+      code: 'di_scheduler.workflow_8050119_20260420_DAY_1',
+      owner: 'data.team@shopee.com',
+      memory: 10.6,
+      memoryText: '10.6 GB',
+      vcores: 14,
+      vcoresText: '14',
+      queueType: '--',
+      queue: '--',
+      schedule: 'Hourly workflow',
+      tasks: [
+        { name: 'sync_user_data', workflowName: 'workflow_user_sync', code: 'di_scheduler.studio_8050119_20260420_DAY_1', status: 'running', owner: 'data.team@shopee.com', memory: 6.1, memoryText: '6.1 GB', vcores: 8, vcoresText: '8', queueType: 'Streaming Yarn Queue', queue: 'dev', schedule: 'Hourly task' },
+        { name: 'dim_user_info', workflowName: 'workflow_user_sync', code: 'di_scheduler.studio_2106534_20260420_DAY_1', status: 'running', owner: 'data.team@shopee.com', memory: 4.5, memoryText: '4.5 GB', vcores: 6, vcoresText: '6', queueType: 'Batch Yarn Queue', queue: 'dev', schedule: 'Hourly task' }
+      ]
+    },
+    {
+      name: 'workflow_payment_detail',
+      code: 'di_scheduler.workflow_3301987_20260420_DAY_1',
+      owner: 'payment.team@shopee.com',
+      memory: 8.4,
+      memoryText: '8.4 GB',
+      vcores: 9,
+      vcoresText: '9',
+      queueType: '--',
+      queue: '--',
+      schedule: 'Daily workflow',
+      tasks: [
+        { name: 'dwd_payment_detail', workflowName: 'workflow_payment_detail', code: 'di_scheduler.studio_3301987_20260420_DAY_1', status: 'running', owner: 'payment.team@shopee.com', memory: 5.0, memoryText: '5.0 GB', vcores: 5, vcoresText: '5', queueType: 'Batch Yarn Queue', queue: 'regdi-live', schedule: 'Daily task' },
+        { name: 'ods_refund_event', workflowName: 'workflow_payment_detail', code: 'di_scheduler.studio_7700008_20260420_DAY_1', status: 'running', owner: 'finance.team@shopee.com', memory: 3.4, memoryText: '3.4 GB', vcores: 4, vcoresText: '4', queueType: 'Presto Queue', queue: 'regdi-adhoc', schedule: 'Daily task' }
+      ]
+    }
+  ],
+  task: [
+    { name: 'update_table', workflowName: 'workflow_order_pipeline', code: 'di_scheduler.studio_6801187_20260420_DAY_1', owner: 'bryann.yeapkk@shopee.com', memory: 7.3, memoryText: '7.3 GB', vcores: 10, vcoresText: '10', queueType: 'Batch Yarn Queue', queue: 'infra', individual: true, schedule: 'Daily task' },
+    { name: 'sync_user_data', workflowName: 'workflow_user_sync', code: 'di_scheduler.studio_8050119_20260420_DAY_1', owner: 'data.team@shopee.com', memory: 6.1, memoryText: '6.1 GB', vcores: 8, vcoresText: '8', queueType: 'Streaming Yarn Queue', queue: 'dev', individual: true, schedule: 'Hourly task' },
+    { name: 'ads_revenue_dashboard', workflowName: 'etl_data_warehouse_wf', code: 'di_scheduler.studio_7700014_20260420_DAY_1', owner: 'finance.team@shopee.com', memory: 5.9, memoryText: '5.9 GB', vcores: 7, vcoresText: '7', queueType: 'Batch Yarn Queue', queue: 'infra', individual: false, schedule: 'Daily task' },
+    { name: 'dws_order_summary_daily', workflowName: 'workflow_order_pipeline', code: 'di_scheduler.studio_5512380_20260420_DAY_1', owner: 'wu.chen@shopee.com', memory: 5.1, memoryText: '5.1 GB', vcores: 7, vcoresText: '7', queueType: 'Batch Yarn Queue', queue: 'infra', individual: false, schedule: 'Daily task' },
+    { name: 'dim_product_attr', workflowName: 'etl_data_warehouse_wf', code: 'di_scheduler.studio_7700005_20260420_DAY_1', owner: 'data.team@shopee.com', memory: 4.8, memoryText: '4.8 GB', vcores: 6, vcoresText: '6', queueType: 'Batch Yarn Queue', queue: 'regdi-live', individual: false, schedule: 'Daily task' },
+    { name: 'dwd_payment_detail', workflowName: 'workflow_payment_detail', code: 'di_scheduler.studio_3301987_20260420_DAY_1', owner: 'payment.team@shopee.com', memory: 5.0, memoryText: '5.0 GB', vcores: 5, vcoresText: '5', queueType: 'Batch Yarn Queue', queue: 'regdi-live', individual: false, schedule: 'Daily task' }
+  ]
+};
+
+const RM_HISTORICAL_RANKING_DATA = {
+  '7d': {
+    workflow: [
+      {
+        name: 'etl_data_warehouse_wf',
+        code: 'di_scheduler.workflow_4501234',
+        owner: 'yaohua.li@shopee.com',
+        runCount: 42,
+        avgMemory: 20.3,
+        avgMemoryText: '20.3 GB',
+        peakMemory: 42.0,
+        peakMemoryText: '42.0 GB',
+        avgVcores: 28.1,
+        avgVcoresText: '28.1',
+        peakVcores: 52,
+        peakVcoresText: '52',
+        queueType: '--',
+        queue: '--',
+        schedule: 'Daily workflow',
+        tasks: [
+          { name: 'ods_click_stream', workflowName: 'etl_data_warehouse_wf', code: 'di_scheduler.studio_7700002', owner: 'data.team@shopee.com', runCount: 42, avgMemory: 5.8, avgMemoryText: '5.8 GB', peakMemory: 11.4, peakMemoryText: '11.4 GB', avgVcores: 8.4, avgVcoresText: '8.4', peakVcores: 18, peakVcoresText: '18', queueType: 'Batch Yarn Queue', queue: 'regdi-live', individual: false, schedule: 'Daily task' },
+          { name: 'dim_product_attr', workflowName: 'etl_data_warehouse_wf', code: 'di_scheduler.studio_7700005', owner: 'data.team@shopee.com', runCount: 40, avgMemory: 4.6, avgMemoryText: '4.6 GB', peakMemory: 9.8, peakMemoryText: '9.8 GB', avgVcores: 6.2, avgVcoresText: '6.2', peakVcores: 14, peakVcoresText: '14', queueType: 'Batch Yarn Queue', queue: 'regdi-live', individual: false, schedule: 'Daily task' },
+          { name: 'ads_revenue_dashboard', workflowName: 'etl_data_warehouse_wf', code: 'di_scheduler.studio_7700014', owner: 'finance.team@shopee.com', runCount: 36, avgMemory: 6.0, avgMemoryText: '6.0 GB', peakMemory: 12.6, peakMemoryText: '12.6 GB', avgVcores: 7.7, avgVcoresText: '7.7', peakVcores: 16, peakVcoresText: '16', queueType: 'Batch Yarn Queue', queue: 'infra', individual: false, schedule: 'Daily task' },
+          { name: 'ads_search_quality', workflowName: 'etl_data_warehouse_wf', code: 'di_scheduler.studio_7700020', owner: 'search.team@shopee.com', runCount: 34, avgMemory: 3.9, avgMemoryText: '3.9 GB', peakMemory: 8.2, peakMemoryText: '8.2 GB', avgVcores: 5.8, avgVcoresText: '5.8', peakVcores: 13, peakVcoresText: '13', queueType: 'Presto Queue', queue: 'regdi-scheduled', individual: false, schedule: 'Daily task' }
+        ]
+      },
+      {
+        name: 'workflow_order_pipeline',
+        code: 'di_scheduler.workflow_6801187',
+        owner: 'bryann.yeapkk@shopee.com',
+        runCount: 31,
+        avgMemory: 15.2,
+        avgMemoryText: '15.2 GB',
+        peakMemory: 28.6,
+        peakMemoryText: '28.6 GB',
+        avgVcores: 21.6,
+        avgVcoresText: '21.6',
+        peakVcores: 40,
+        peakVcoresText: '40',
+        queueType: '--',
+        queue: '--',
+        schedule: 'Daily workflow',
+        tasks: [
+          { name: 'update_table', workflowName: 'workflow_order_pipeline', code: 'di_scheduler.studio_6801187', owner: 'bryann.yeapkk@shopee.com', runCount: 31, avgMemory: 6.9, avgMemoryText: '6.9 GB', peakMemory: 13.8, peakMemoryText: '13.8 GB', avgVcores: 9.6, avgVcoresText: '9.6', peakVcores: 20, peakVcoresText: '20', queueType: 'Batch Yarn Queue', queue: 'infra', individual: true, schedule: 'Daily task' },
+          { name: 'dws_order_summary_daily', workflowName: 'workflow_order_pipeline', code: 'di_scheduler.studio_5512380', owner: 'wu.chen@shopee.com', runCount: 31, avgMemory: 4.7, avgMemoryText: '4.7 GB', peakMemory: 9.6, peakMemoryText: '9.6 GB', avgVcores: 7.0, avgVcoresText: '7.0', peakVcores: 12, peakVcoresText: '12', queueType: 'Batch Yarn Queue', queue: 'infra', individual: false, schedule: 'Daily task' },
+          { name: 'ads_order_report', workflowName: 'workflow_order_pipeline', code: 'di_scheduler.studio_6678901', owner: 'shanjing.lim@shopee.com', runCount: 27, avgMemory: 3.6, avgMemoryText: '3.6 GB', peakMemory: 7.2, peakMemoryText: '7.2 GB', avgVcores: 5.0, avgVcoresText: '5.0', peakVcores: 10, peakVcoresText: '10', queueType: 'Presto Queue', queue: 'regdi-scheduled', individual: false, schedule: 'Daily task' }
+        ]
+      },
+      {
+        name: 'workflow_user_sync',
+        code: 'di_scheduler.workflow_8050119',
+        owner: 'data.team@shopee.com',
+        runCount: 73,
+        avgMemory: 10.2,
+        avgMemoryText: '10.2 GB',
+        peakMemory: 20.0,
+        peakMemoryText: '20.0 GB',
+        avgVcores: 13.4,
+        avgVcoresText: '13.4',
+        peakVcores: 26,
+        peakVcoresText: '26',
+        queueType: '--',
+        queue: '--',
+        schedule: 'Hourly workflow',
+        tasks: [
+          { name: 'sync_user_data', workflowName: 'workflow_user_sync', code: 'di_scheduler.studio_8050119', owner: 'data.team@shopee.com', runCount: 73, avgMemory: 5.9, avgMemoryText: '5.9 GB', peakMemory: 11.8, peakMemoryText: '11.8 GB', avgVcores: 7.6, avgVcoresText: '7.6', peakVcores: 15, peakVcoresText: '15', queueType: 'Streaming Yarn Queue', queue: 'dev', individual: true, schedule: 'Hourly task' },
+          { name: 'dim_user_info', workflowName: 'workflow_user_sync', code: 'di_scheduler.studio_2106534', owner: 'data.team@shopee.com', runCount: 70, avgMemory: 4.3, avgMemoryText: '4.3 GB', peakMemory: 8.2, peakMemoryText: '8.2 GB', avgVcores: 5.8, avgVcoresText: '5.8', peakVcores: 11, peakVcoresText: '11', queueType: 'Batch Yarn Queue', queue: 'dev', individual: false, schedule: 'Hourly task' }
+        ]
+      },
+      {
+        name: 'workflow_payment_detail',
+        code: 'di_scheduler.workflow_3301987',
+        owner: 'payment.team@shopee.com',
+        runCount: 28,
+        avgMemory: 8.8,
+        avgMemoryText: '8.8 GB',
+        peakMemory: 18.4,
+        peakMemoryText: '18.4 GB',
+        avgVcores: 9.8,
+        avgVcoresText: '9.8',
+        peakVcores: 20,
+        peakVcoresText: '20',
+        queueType: '--',
+        queue: '--',
+        schedule: 'Daily workflow',
+        tasks: [
+          { name: 'dwd_payment_detail', workflowName: 'workflow_payment_detail', code: 'di_scheduler.studio_3301987', owner: 'payment.team@shopee.com', runCount: 28, avgMemory: 5.2, avgMemoryText: '5.2 GB', peakMemory: 10.2, peakMemoryText: '10.2 GB', avgVcores: 5.7, avgVcoresText: '5.7', peakVcores: 12, peakVcoresText: '12', queueType: 'Batch Yarn Queue', queue: 'regdi-live', individual: false, schedule: 'Daily task' },
+          { name: 'ods_refund_event', workflowName: 'workflow_payment_detail', code: 'di_scheduler.studio_7700008', owner: 'finance.team@shopee.com', runCount: 24, avgMemory: 3.6, avgMemoryText: '3.6 GB', peakMemory: 8.2, peakMemoryText: '8.2 GB', avgVcores: 4.1, avgVcoresText: '4.1', peakVcores: 8, peakVcoresText: '8', queueType: 'Presto Queue', queue: 'regdi-adhoc', individual: false, schedule: 'Daily task' }
+        ]
+      }
+    ]
+  },
+  '30d': {
+    workflow: [
+      {
+        name: 'etl_data_warehouse_wf',
+        code: 'di_scheduler.workflow_4501234',
+        owner: 'yaohua.li@shopee.com',
+        runCount: 176,
+        avgMemory: 18.9,
+        avgMemoryText: '18.9 GB',
+        peakMemory: 46.5,
+        peakMemoryText: '46.5 GB',
+        avgVcores: 26.8,
+        avgVcoresText: '26.8',
+        peakVcores: 58,
+        peakVcoresText: '58',
+        queueType: '--',
+        queue: '--',
+        schedule: 'Daily workflow',
+        tasks: [
+          { name: 'ods_click_stream', workflowName: 'etl_data_warehouse_wf', code: 'di_scheduler.studio_7700002', owner: 'data.team@shopee.com', runCount: 176, avgMemory: 5.3, avgMemoryText: '5.3 GB', peakMemory: 12.1, peakMemoryText: '12.1 GB', avgVcores: 7.9, avgVcoresText: '7.9', peakVcores: 20, peakVcoresText: '20', queueType: 'Batch Yarn Queue', queue: 'regdi-live', individual: false, schedule: 'Daily task' },
+          { name: 'dim_product_attr', workflowName: 'etl_data_warehouse_wf', code: 'di_scheduler.studio_7700005', owner: 'data.team@shopee.com', runCount: 170, avgMemory: 4.4, avgMemoryText: '4.4 GB', peakMemory: 10.4, peakMemoryText: '10.4 GB', avgVcores: 6.0, avgVcoresText: '6.0', peakVcores: 15, peakVcoresText: '15', queueType: 'Batch Yarn Queue', queue: 'regdi-live', individual: false, schedule: 'Daily task' },
+          { name: 'ads_revenue_dashboard', workflowName: 'etl_data_warehouse_wf', code: 'di_scheduler.studio_7700014', owner: 'finance.team@shopee.com', runCount: 152, avgMemory: 5.7, avgMemoryText: '5.7 GB', peakMemory: 13.8, peakMemoryText: '13.8 GB', avgVcores: 7.4, avgVcoresText: '7.4', peakVcores: 18, peakVcoresText: '18', queueType: 'Batch Yarn Queue', queue: 'infra', individual: false, schedule: 'Daily task' },
+          { name: 'ads_search_quality', workflowName: 'etl_data_warehouse_wf', code: 'di_scheduler.studio_7700020', owner: 'search.team@shopee.com', runCount: 144, avgMemory: 3.5, avgMemoryText: '3.5 GB', peakMemory: 9.1, peakMemoryText: '9.1 GB', avgVcores: 5.5, avgVcoresText: '5.5', peakVcores: 14, peakVcoresText: '14', queueType: 'Presto Queue', queue: 'regdi-scheduled', individual: false, schedule: 'Daily task' }
+        ]
+      },
+      {
+        name: 'workflow_order_pipeline',
+        code: 'di_scheduler.workflow_6801187',
+        owner: 'bryann.yeapkk@shopee.com',
+        runCount: 128,
+        avgMemory: 14.0,
+        avgMemoryText: '14.0 GB',
+        peakMemory: 31.2,
+        peakMemoryText: '31.2 GB',
+        avgVcores: 20.2,
+        avgVcoresText: '20.2',
+        peakVcores: 44,
+        peakVcoresText: '44',
+        queueType: '--',
+        queue: '--',
+        schedule: 'Daily workflow',
+        tasks: [
+          { name: 'update_table', workflowName: 'workflow_order_pipeline', code: 'di_scheduler.studio_6801187', owner: 'bryann.yeapkk@shopee.com', runCount: 128, avgMemory: 6.1, avgMemoryText: '6.1 GB', peakMemory: 15.2, peakMemoryText: '15.2 GB', avgVcores: 9.0, avgVcoresText: '9.0', peakVcores: 23, peakVcoresText: '23', queueType: 'Batch Yarn Queue', queue: 'infra', individual: true, schedule: 'Daily task' },
+          { name: 'dws_order_summary_daily', workflowName: 'workflow_order_pipeline', code: 'di_scheduler.studio_5512380', owner: 'wu.chen@shopee.com', runCount: 128, avgMemory: 4.5, avgMemoryText: '4.5 GB', peakMemory: 10.6, peakMemoryText: '10.6 GB', avgVcores: 6.8, avgVcoresText: '6.8', peakVcores: 14, peakVcoresText: '14', queueType: 'Batch Yarn Queue', queue: 'infra', individual: false, schedule: 'Daily task' },
+          { name: 'ads_order_report', workflowName: 'workflow_order_pipeline', code: 'di_scheduler.studio_6678901', owner: 'shanjing.lim@shopee.com', runCount: 116, avgMemory: 3.4, avgMemoryText: '3.4 GB', peakMemory: 8.0, peakMemoryText: '8.0 GB', avgVcores: 4.8, avgVcoresText: '4.8', peakVcores: 11, peakVcoresText: '11', queueType: 'Presto Queue', queue: 'regdi-scheduled', individual: false, schedule: 'Daily task' }
+        ]
+      },
+      {
+        name: 'workflow_user_sync',
+        code: 'di_scheduler.workflow_8050119',
+        owner: 'data.team@shopee.com',
+        runCount: 318,
+        avgMemory: 9.7,
+        avgMemoryText: '9.7 GB',
+        peakMemory: 22.4,
+        peakMemoryText: '22.4 GB',
+        avgVcores: 12.8,
+        avgVcoresText: '12.8',
+        peakVcores: 29,
+        peakVcoresText: '29',
+        queueType: '--',
+        queue: '--',
+        schedule: 'Hourly workflow',
+        tasks: [
+          { name: 'sync_user_data', workflowName: 'workflow_user_sync', code: 'di_scheduler.studio_8050119', owner: 'data.team@shopee.com', runCount: 318, avgMemory: 5.5, avgMemoryText: '5.5 GB', peakMemory: 12.6, peakMemoryText: '12.6 GB', avgVcores: 7.2, avgVcoresText: '7.2', peakVcores: 17, peakVcoresText: '17', queueType: 'Streaming Yarn Queue', queue: 'dev', individual: true, schedule: 'Hourly task' },
+          { name: 'dim_user_info', workflowName: 'workflow_user_sync', code: 'di_scheduler.studio_2106534', owner: 'data.team@shopee.com', runCount: 306, avgMemory: 4.2, avgMemoryText: '4.2 GB', peakMemory: 9.8, peakMemoryText: '9.8 GB', avgVcores: 5.6, avgVcoresText: '5.6', peakVcores: 12, peakVcoresText: '12', queueType: 'Batch Yarn Queue', queue: 'dev', individual: false, schedule: 'Hourly task' }
+        ]
+      },
+      {
+        name: 'workflow_payment_detail',
+        code: 'di_scheduler.workflow_3301987',
+        owner: 'payment.team@shopee.com',
+        runCount: 120,
+        avgMemory: 8.1,
+        avgMemoryText: '8.1 GB',
+        peakMemory: 19.6,
+        peakMemoryText: '19.6 GB',
+        avgVcores: 9.2,
+        avgVcoresText: '9.2',
+        peakVcores: 22,
+        peakVcoresText: '22',
+        queueType: '--',
+        queue: '--',
+        schedule: 'Daily workflow',
+        tasks: [
+          { name: 'dwd_payment_detail', workflowName: 'workflow_payment_detail', code: 'di_scheduler.studio_3301987', owner: 'payment.team@shopee.com', runCount: 120, avgMemory: 4.8, avgMemoryText: '4.8 GB', peakMemory: 11.6, peakMemoryText: '11.6 GB', avgVcores: 5.4, avgVcoresText: '5.4', peakVcores: 13, peakVcoresText: '13', queueType: 'Batch Yarn Queue', queue: 'regdi-live', individual: false, schedule: 'Daily task' },
+          { name: 'ods_refund_event', workflowName: 'workflow_payment_detail', code: 'di_scheduler.studio_7700008', owner: 'finance.team@shopee.com', runCount: 104, avgMemory: 3.3, avgMemoryText: '3.3 GB', peakMemory: 8.8, peakMemoryText: '8.8 GB', avgVcores: 3.8, avgVcoresText: '3.8', peakVcores: 9, peakVcoresText: '9', queueType: 'Presto Queue', queue: 'regdi-adhoc', individual: false, schedule: 'Daily task' }
+        ]
+      }
+    ]
+  }
+};
+
+let rmCurrentRegion = 'SG';
+let rmQueueDimension = 'project';
+let rmCurrentRange = 'Last 1 Hour';
+let rmRankingScope = 'running';
+let rmHistoryRange = '7d';
+let rmQueueCascadeRegion = 'ID_SeaMoney';
+let rmSelectedQueues = [];
+let rmRankingMode = 'workflow';
+let rmRankingVisible = true;
+let rmSortField = 'vcores';
+let rmSortDir = 'desc';
+let rmTrendContext = null;
+let rmTrendRange = 'week';
+let rmTrendCustomStart = '';
+let rmTrendCustomEnd = '';
+const rmExpandedWorkflows = new Set();
+
+function rmNotify(msg) {
+  if (typeof showToast === 'function') showToast(msg);
+}
+
+function rmEscape(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch) {
+    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+  });
+}
+
+function switchView(viewId) {
+  document.querySelectorAll('.left-view').forEach(function(v) { v.style.display = 'none'; v.classList.remove('active'); });
+  var target = document.getElementById(viewId);
+  if (target) { target.style.display = ''; target.classList.add('active'); }
+  document.querySelectorAll('.sb-item').forEach(function(item) { item.classList.remove('active'); });
+  if (viewId === 'view-project-overview') {
+    document.getElementById('nav-project-overview').classList.add('active');
+    initResourceMonitor();
+  } else if (viewId === 'view-tasklist') {
+    document.getElementById('nav-sched').classList.add('active');
+  }
+}
+
+function switchProjectOverviewTab(btn) {
+  var tab = btn.getAttribute('data-project-tab');
+  document.querySelectorAll('.po-tab').forEach(function(item) { item.classList.toggle('active', item === btn); });
+  document.querySelectorAll('.po-panel').forEach(function(panel) {
+    panel.style.display = panel.getAttribute('data-project-panel') === tab ? '' : 'none';
+  });
+  if (tab === 'resource') initResourceMonitor();
+  rmNotify(btn.textContent.trim() + ' selected');
+}
+
+function renderQueueMetric(metric) {
+  var width = Math.max(1, Math.min(Number(metric.percent) || 0, 100));
+  var danger = metric.danger || metric.percent > 100;
+  return '<div class="rm-resource-metric">' +
+    '<div class="rm-resource-meta"><span class="rm-resource-label">' + rmEscape(metric.label) + '</span><span class="rm-resource-sub">' + rmEscape(metric.detail) + '</span></div>' +
+    '<div class="rm-resource-bar-row"><div class="rm-resource-track"><div class="rm-resource-fill' + (danger ? ' danger' : '') + '" style="width:' + width + '%"></div></div><div class="rm-resource-percent">' + Number(metric.percent).toFixed(2) + '%</div></div>' +
+    '</div>';
+}
+
+function renderQueueResource() {
+  var grid = document.getElementById('rmQueueGrid');
+  if (!grid) return;
+  var rows = RM_QUEUE_DATA[rmCurrentRegion] || [];
+  grid.innerHTML = rows.map(function(queue) {
+    return '<div class="rm-queue-item">' +
+      '<div class="rm-queue-name-row"><button type="button" class="rm-queue-name" onclick="selectQueueFromUsage(\'' + rmEscape(queue.name) + '\')">' + rmEscape(queue.name) + '</button><span class="rm-queue-tag">' + rmEscape(queue.tag) + '</span></div>' +
+      '<div class="rm-metric-pair">' + renderQueueMetric(queue.vcores) + renderQueueMetric(queue.memory) + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+function switchResourceRegion(btn, region) {
+  rmCurrentRegion = region;
+  document.querySelectorAll('.rm-zone').forEach(function(item) { item.classList.toggle('active', item === btn); });
+  renderQueueResource();
+  rmNotify(region + ' resource usage loaded');
+}
+
+function selectQueueFromUsage(queueName) {
+  var select = document.getElementById('rmQueueName');
+  var rankingSelect = document.getElementById('rmQueueFilter');
+  if (select) select.value = queueName;
+  rmQueueCascadeRegion = findQueueRegion(queueName) || rmQueueCascadeRegion;
+  rmSelectedQueues = [getQueueCascadeKey(rmQueueCascadeRegion, queueName)];
+  if (rankingSelect) rankingSelect.value = getSelectedQueueNames().join(',');
+  syncQueueCascadeDisplay();
+  applyQueueFilters();
+  renderResourceRanking(getFilteredRankingRows());
+  updateSortIndicators();
+  rmNotify('Queue selected: ' + queueName);
+}
+
+function switchQueueDimension(btn, dimension) {
+  rmQueueDimension = dimension;
+  btn.parentElement.querySelectorAll('button').forEach(function(item) { item.classList.toggle('active', item === btn); });
+  applyQueueFilters();
+  rmNotify(btn.textContent.trim() + ' view');
+}
+
+function switchTimeRange(btn, range) {
+  rmCurrentRange = range;
+  document.querySelectorAll('.rm-range').forEach(function(item) { item.classList.toggle('active', item === btn); });
+  applyQueueFilters();
+}
+
+function applyQueueFilters() {
+  var stats = Object.assign({}, RM_TIME_STATS[rmQueueDimension][rmCurrentRange]);
+  var type = (document.getElementById('rmTaskType') || {}).value || '';
+  var priority = (document.getElementById('rmTaskPriority') || {}).value || '';
+  var queue = (document.getElementById('rmQueueName') || {}).value || '';
+  if (type.trim()) { stats.p90 += 2; stats.p99 += 6; }
+  if (priority === 'P0' || priority === 'P1') { stats.p50 += 1; stats.p90 += 4; stats.p99 += 10; }
+  if (queue === 'infra') { stats.p50 += 2; stats.p90 += 8; stats.p99 += 18; }
+  if (queue === 'regdi-adhoc') { stats.p90 += 1; stats.p99 += 3; }
+  document.getElementById('rmDateRange').textContent = stats.date;
+  document.getElementById('rmP50').textContent = stats.p50 + ' min';
+  document.getElementById('rmP90').textContent = stats.p90 + ' min';
+  document.getElementById('rmP99').textContent = stats.p99 + ' min';
+}
+
+function getDefaultRankingSortField() {
+  return rmRankingScope === 'historical' ? 'avgVcores' : 'vcores';
+}
+
+function setDefaultRankingSort() {
+  rmSortField = getDefaultRankingSortField();
+  rmSortDir = 'desc';
+}
+
+function renderHistoryToolbar() {
+  var toolbar = document.getElementById('rmHistoryToolbar');
+  if (!toolbar) return;
+  toolbar.classList.toggle('hidden', rmRankingScope !== 'historical');
+  toolbar.querySelectorAll('[data-history-range]').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-history-range') === rmHistoryRange);
+  });
+}
+
+function switchRankingScope(btn, scope) {
+  rmRankingScope = scope;
+  rmRankingVisible = true;
+  setDefaultRankingSort();
+  rmExpandedWorkflows.clear();
+  btn.parentElement.querySelectorAll('button').forEach(function(item) { item.classList.toggle('active', item === btn); });
+  renderRankingControls();
+  renderRankingHeader();
+  resetRankingFilters(false);
+  rmNotify(scope === 'historical' ? 'Historical ranking selected' : 'Running ranking selected');
+}
+
+function switchRankingMode(btn, mode) {
+  rmRankingMode = mode;
+  rmRankingVisible = true;
+  setDefaultRankingSort();
+  rmExpandedWorkflows.clear();
+  btn.parentElement.querySelectorAll('button').forEach(function(item) { item.classList.toggle('active', item === btn); });
+  renderRankingControls();
+  renderRankingHeader();
+  resetRankingFilters(false);
+  rmNotify((mode === 'workflow' ? 'Workflow' : 'Task') + ' ranking selected');
+}
+
+function switchHistoryRange(btn, range, silent) {
+  rmHistoryRange = range;
+  setDefaultRankingSort();
+  rmExpandedWorkflows.clear();
+  if (btn) {
+    btn.parentElement.querySelectorAll('[data-history-range]').forEach(function(item) { item.classList.toggle('active', item === btn); });
+  }
+  renderRankingHeader();
+  renderResourceRanking(getFilteredRankingRows());
+  updateSortIndicators();
+  if (!silent) rmNotify(getHistoryRangeLabel(range) + ' historical ranking loaded');
+}
+
+function openDatePicker(nativeId) {
+  var input = document.getElementById(nativeId);
+  if (!input) return;
+  if (typeof input.showPicker === 'function') {
+    input.showPicker();
+  } else {
+    input.focus();
+  }
+}
+
+function syncDatePicker(displayId, nativeId, updateHistory) {
+  var display = document.getElementById(displayId);
+  var nativeInput = document.getElementById(nativeId);
+  if (display && nativeInput) display.value = nativeInput.value || '';
+  if (updateHistory) activateCustomHistoryRange();
+}
+
+function activateCustomHistoryRange() {
+  var customBtn = document.querySelector('[data-history-range="custom"]');
+  if (rmHistoryRange !== 'custom') {
+    switchHistoryRange(customBtn, 'custom', true);
+  } else {
+    renderResourceRanking(getFilteredRankingRows());
+    updateSortIndicators();
+  }
+}
+
+function getQueueTypeOptions() {
+  return '<option value="">Select Queue Type</option><option>Batch Yarn Queue</option><option>Streaming Yarn Queue</option><option>Presto Queue</option>';
+}
+
+function findQueueRegion(queueName) {
+  var match = RM_QUEUE_CASCADE_DATA.find(function(group) {
+    return group.queues.indexOf(queueName) >= 0;
+  });
+  return match ? match.region : '';
+}
+
+function getQueueCascadeGroup(region) {
+  return RM_QUEUE_CASCADE_DATA.find(function(group) { return group.region === region; }) || RM_QUEUE_CASCADE_DATA[0];
+}
+
+function getQueueCascadeKey(region, queue) {
+  return region + '::' + queue;
+}
+
+function getQueueNameFromKey(key) {
+  var parts = String(key || '').split('::');
+  return parts.length > 1 ? parts.slice(1).join('::') : String(key || '');
+}
+
+function getSelectedQueueNames() {
+  return rmSelectedQueues.map(getQueueNameFromKey);
+}
+
+function renderQueueCascadeOptions() {
+  var left = document.getElementById('rmQueueCascadeRegions');
+  var right = document.getElementById('rmQueueCascadeQueues');
+  if (!left || !right) return;
+  left.innerHTML = RM_QUEUE_CASCADE_DATA.map(function(group) {
+    var selectedCount = group.queues.filter(function(queue) { return rmSelectedQueues.indexOf(getQueueCascadeKey(group.region, queue)) >= 0; }).length;
+    var checkedClass = selectedCount === group.queues.length ? 'checked' : (selectedCount > 0 ? 'partial' : '');
+    var active = group.region === rmQueueCascadeRegion;
+    return '<button type="button" class="' + (active ? 'active' : '') + '" onclick="selectQueueCascadeRegion(event, \'' + rmEscape(group.region) + '\')">' +
+      '<i class="' + checkedClass + '" onclick="toggleQueueCascadeRegion(event, \'' + rmEscape(group.region) + '\')"></i><span>' + rmEscape(group.region) + '</span><b>›</b></button>';
+  }).join('');
+  right.innerHTML = getQueueCascadeGroup(rmQueueCascadeRegion).queues.map(function(queue) {
+    var checked = rmSelectedQueues.indexOf(getQueueCascadeKey(rmQueueCascadeRegion, queue)) >= 0;
+    return '<button type="button" class="' + (checked ? 'active' : '') + '" onclick="selectQueueCascadeValue(event, \'' + rmEscape(rmQueueCascadeRegion) + '\', \'' + rmEscape(queue) + '\')">' +
+      '<i class="' + (checked ? 'checked' : '') + '"></i><span>' + rmEscape(queue) + '</span></button>';
+  }).join('');
+}
+
+function getSelectedQueueText() {
+  var names = getSelectedQueueNames();
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return names.join(', ');
+  if (rmSelectedQueues.length > 2) return rmSelectedQueues.length + ' Queues Selected';
+  return 'Select Queue';
+}
+
+function renderSelectedQueueValue() {
+  if (!rmSelectedQueues.length) return '<span id="rmQueueFilterText" class="rm-cascade-value placeholder">Select Queue</span>';
+  var firstKey = rmSelectedQueues[0];
+  var firstQueue = getQueueNameFromKey(firstKey);
+  var moreCount = rmSelectedQueues.length - 1;
+  return '<span id="rmQueueFilterText" class="rm-cascade-value" title="' + rmEscape(getSelectedQueueNames().join(', ')) + '">' +
+    '<span class="rm-queue-token">' + rmEscape(firstQueue) + '<button type="button" onclick="removeQueueCascadeValue(event, \'' + rmEscape(firstKey) + '\')" aria-label="Remove ' + rmEscape(firstQueue) + '">×</button></span>' +
+    (moreCount > 0 ? '<span class="rm-queue-token more">+ ' + moreCount + ' ...</span>' : '') +
+  '</span>';
+}
+
+function syncQueueCascadeDisplay() {
+  var hidden = document.getElementById('rmQueueFilter');
+  var text = document.getElementById('rmQueueFilterText');
+  if (hidden) hidden.value = getSelectedQueueNames().join(',');
+  if (text) {
+    text.outerHTML = renderSelectedQueueValue();
+  }
+  renderQueueCascadeOptions();
+}
+
+function closeQueueCascade() {
+  document.querySelectorAll('.rm-cascade-field.open').forEach(function(field) {
+    field.classList.remove('open');
+  });
+}
+
+function ensureQueueCascadeListener() {
+  if (typeof window === 'undefined' || !document.addEventListener) return;
+  if (window.rmQueueCascadeListenerReady) return;
+  window.rmQueueCascadeListenerReady = true;
+  document.addEventListener('click', function(event) {
+    if (!event.target.closest('.rm-cascade-field')) closeQueueCascade();
+  });
+}
+
+function toggleQueueCascade(event) {
+  event.stopPropagation();
+  var field = event.currentTarget.closest('.rm-cascade-field');
+  if (!field) return;
+  var willOpen = !field.classList.contains('open');
+  closeQueueCascade();
+  field.classList.toggle('open', willOpen);
+  renderQueueCascadeOptions();
+}
+
+function selectQueueCascadeRegion(event, region) {
+  event.stopPropagation();
+  rmQueueCascadeRegion = region;
+  renderQueueCascadeOptions();
+}
+
+function toggleQueueCascadeRegion(event, region) {
+  event.stopPropagation();
+  rmQueueCascadeRegion = region;
+  var group = getQueueCascadeGroup(region);
+  var allSelected = group.queues.every(function(queue) { return rmSelectedQueues.indexOf(getQueueCascadeKey(region, queue)) >= 0; });
+  if (allSelected) {
+    rmSelectedQueues = rmSelectedQueues.filter(function(key) { return key.indexOf(region + '::') !== 0; });
+  } else {
+    group.queues.forEach(function(queue) {
+      var key = getQueueCascadeKey(region, queue);
+      if (rmSelectedQueues.indexOf(key) < 0) rmSelectedQueues.push(key);
+    });
+  }
+  syncQueueCascadeDisplay();
+  renderResourceRanking(getFilteredRankingRows());
+  updateSortIndicators();
+}
+
+function selectQueueCascadeValue(event, region, queue) {
+  event.stopPropagation();
+  var key = getQueueCascadeKey(region, queue);
+  var index = rmSelectedQueues.indexOf(key);
+  if (index >= 0) {
+    rmSelectedQueues.splice(index, 1);
+  } else {
+    rmSelectedQueues.push(key);
+  }
+  syncQueueCascadeDisplay();
+  renderResourceRanking(getFilteredRankingRows());
+  updateSortIndicators();
+}
+
+function removeQueueCascadeValue(event, key) {
+  event.stopPropagation();
+  var index = rmSelectedQueues.indexOf(key);
+  if (index >= 0) rmSelectedQueues.splice(index, 1);
+  syncQueueCascadeDisplay();
+  renderResourceRanking(getFilteredRankingRows());
+  updateSortIndicators();
+}
+
+function renderQueueCascadeFilter() {
+  return '<div class="rm-field rm-queue-name rm-cascade-field">' +
+    '<span>Queue Name</span>' +
+    '<div class="rm-cascade-select" onclick="toggleQueueCascade(event)">' +
+      '<input id="rmQueueFilter" type="hidden" value="' + rmEscape(getSelectedQueueNames().join(',')) + '">' +
+      renderSelectedQueueValue() +
+      '<b>⌄</b>' +
+    '</div>' +
+    '<div class="rm-cascade-popup" onclick="event.stopPropagation()">' +
+      '<div class="rm-cascade-regions" id="rmQueueCascadeRegions"></div>' +
+      '<div class="rm-cascade-queues" id="rmQueueCascadeQueues"></div>' +
+    '</div>' +
+  '</div>';
+}
+
+function renderTaskFilterActions() {
+  return '<div class="rm-task-filter-actions">' +
+    '<label class="rm-check"><input id="rmIndividualFilter" type="checkbox"><span>Individual Tasks</span></label>' +
+    '<div class="rm-actions"><button type="button" class="rm-btn" onclick="resetRankingFilters()">Reset</button><button type="button" class="rm-btn primary" onclick="searchResourceRanking()">Search</button></div>' +
+  '</div>';
+}
+
+function renderRankingControls() {
+  var filters = document.getElementById('rmRankingFilters');
+  if (!filters) return;
+  ensureQueueCascadeListener();
+  renderHistoryToolbar();
+  filters.className = 'rm-filter-row rm-ranking-filters ' + rmRankingMode + ' ' + rmRankingScope;
+  if (rmRankingScope === 'historical') {
+    if (rmRankingMode === 'task') {
+      filters.innerHTML =
+        '<label class="rm-field rm-workflow-name"><span>Workflow Name</span><input id="rmWorkflowFilter" type="text" placeholder="Enter Workflow Name"></label>' +
+        '<label class="rm-field rm-task-name"><span>Task Name</span><input id="rmTaskNameFilter" type="text" placeholder="Enter Task Name"></label>' +
+        '<label class="rm-field rm-task-owner"><span>Task Owner</span><input id="rmOwnerFilter" type="text" placeholder="Enter Task Owner Email"></label>' +
+        '<label class="rm-field rm-queue-type"><span>Queue Type</span><select id="rmQueueTypeFilter">' + getQueueTypeOptions() + '</select></label>' +
+        renderQueueCascadeFilter() +
+        renderTaskFilterActions();
+      syncQueueCascadeDisplay();
+      return;
+    }
+    filters.innerHTML =
+      '<label class="rm-field rm-workflow-name"><span>Workflow Name</span><input id="rmNameFilter" type="text" placeholder="Enter Workflow Name"></label>' +
+      '<label class="rm-field rm-workflow-owner"><span>Workflow Owner</span><input id="rmOwnerFilter" type="text" placeholder="Enter Workflow Owner Email"></label>' +
+      '<label class="rm-field rm-queue-type"><span>Queue Type</span><select id="rmQueueTypeFilter">' + getQueueTypeOptions() + '</select></label>' +
+      renderQueueCascadeFilter() +
+      '<div class="rm-actions"><button type="button" class="rm-btn" onclick="resetRankingFilters()">Reset</button><button type="button" class="rm-btn primary" onclick="searchResourceRanking()">Search</button></div>';
+    syncQueueCascadeDisplay();
+    return;
+  }
+  if (rmRankingMode === 'task') {
+    filters.innerHTML =
+      '<label class="rm-field rm-workflow-name"><span>Workflow Name</span><input id="rmWorkflowFilter" type="text" placeholder="Enter Workflow Name"></label>' +
+      '<label class="rm-field rm-task-name"><span>Task Name</span><input id="rmTaskNameFilter" type="text" placeholder="Enter Task Name"></label>' +
+      '<label class="rm-field rm-task-code"><span>Task Instance Code</span><input id="rmCodeFilter" type="text" placeholder="Enter Instance Code"></label>' +
+      '<label class="rm-field rm-task-owner"><span>Task Owner</span><input id="rmOwnerFilter" type="text" placeholder="Enter Task Owner Email"></label>' +
+      '<label class="rm-field rm-queue-type"><span>Queue Type</span><select id="rmQueueTypeFilter">' + getQueueTypeOptions() + '</select></label>' +
+      renderQueueCascadeFilter() +
+      renderTaskFilterActions();
+    syncQueueCascadeDisplay();
+    return;
+  }
+  filters.innerHTML =
+    '<label class="rm-field rm-workflow-name"><span>Workflow Name</span><input id="rmNameFilter" type="text" placeholder="Enter Workflow Name"></label>' +
+    '<label class="rm-field rm-workflow-code"><span>Workflow Instance Code</span><input id="rmCodeFilter" type="text" placeholder="Enter Workflow Insta..."></label>' +
+    '<label class="rm-field rm-workflow-owner"><span>Workflow Owner</span><input id="rmOwnerFilter" type="text" placeholder="Enter Workflow Owner Email"></label>' +
+    '<label class="rm-field rm-queue-type"><span>Queue Type</span><select id="rmQueueTypeFilter">' + getQueueTypeOptions() + '</select></label>' +
+    renderQueueCascadeFilter() +
+    '<div class="rm-actions"><button type="button" class="rm-btn" onclick="resetRankingFilters()">Reset</button><button type="button" class="rm-btn primary" onclick="searchResourceRanking()">Search</button></div>';
+  syncQueueCascadeDisplay();
+}
+
+const RM_SORT_TIPS = {
+  runCount: 'Number of successful instances in the selected time range.',
+  avgMemory: 'Average of each successful instance peak memory in the selected time range.',
+  peakMemory: 'Highest peak memory among successful instances in the selected time range.',
+  avgVcores: 'Average of each successful instance peak VCore usage in the selected time range.',
+  peakVcores: 'Highest peak VCore usage among successful instances in the selected time range.',
+  memory: 'Current memory usage of the running instance.',
+  vcores: 'Current VCore usage of the running instance.'
+};
+
+function renderInfoTip(field) {
+  var tip = RM_SORT_TIPS[field] || '';
+  if (!tip) return '';
+  return '<span class="rm-tip" aria-label="' + rmEscape(tip) + '"><i>?</i><span class="rm-tip-bubble">' + rmEscape(tip) + '</span></span>';
+}
+
+function renderSortButton(label, field, withHelp) {
+  return '<button type="button" class="rm-sort" data-sort-field="' + field + '" onclick="sortResourceRanking(\'' + field + '\')">' +
+    '<span class="rm-sort-label">' + rmEscape(label) + '</span>' +
+    (withHelp === false ? '' : renderInfoTip(field)) +
+    '<span class="rm-sort-dir">↕</span></button>';
+}
+
+function renderRankingHeader() {
+  var head = document.getElementById('rmRankingHead');
+  if (!head) return;
+  var table = head.closest('table');
+  if (table) {
+    table.classList.toggle('task-mode', rmRankingMode === 'task');
+    table.classList.toggle('workflow-mode', rmRankingMode === 'workflow');
+    table.classList.toggle('historical-mode', rmRankingScope === 'historical');
+    table.classList.toggle('running-mode', rmRankingScope === 'running');
+  }
+  if (rmRankingScope === 'historical') {
+    if (rmRankingMode === 'task') {
+      head.innerHTML =
+        '<th>Task Name</th><th>Workflow Name</th><th>Owner</th><th>Queue Type</th><th>Queue Name</th>' +
+        '<th>' + renderSortButton('Run Count', 'runCount') + '</th>' +
+        '<th>' + renderSortButton('Avg Memory', 'avgMemory') + '</th><th>' + renderSortButton('Peak Memory', 'peakMemory') + '</th>' +
+        '<th>' + renderSortButton('Avg VCore', 'avgVcores') + '</th><th>' + renderSortButton('Peak VCore', 'peakVcores') + '</th><th>Action</th>';
+      updateSortIndicators();
+      return;
+    }
+    head.innerHTML =
+      '<th></th><th>Workflow Name</th><th>Owner</th>' +
+      '<th>' + renderSortButton('Run Count', 'runCount') + '</th>' +
+      '<th>' + renderSortButton('Avg Memory', 'avgMemory') + '</th><th>' + renderSortButton('Peak Memory', 'peakMemory') + '</th>' +
+      '<th>' + renderSortButton('Avg VCore', 'avgVcores') + '</th><th>' + renderSortButton('Peak VCore', 'peakVcores') + '</th><th>Action</th>';
+    updateSortIndicators();
+    return;
+  }
+  if (rmRankingMode === 'task') {
+    head.innerHTML =
+      '<th>Task Name</th><th>Instance code</th><th>Workflow Name</th><th>Owner</th><th>Queue Type</th><th>Queue Name</th>' +
+      '<th>' + renderSortButton('Memory', 'memory') + '</th>' +
+      '<th>' + renderSortButton('Vcores', 'vcores') + '</th><th>Action</th>';
+    updateSortIndicators();
+    return;
+  }
+  head.innerHTML =
+    '<th></th><th>Workflow Name</th><th>Instance Code</th><th>Owner</th><th>Queue Type</th><th>Queue Name</th>' +
+    '<th>' + renderSortButton('Memory', 'memory') + '</th>' +
+    '<th>' + renderSortButton('Vcores', 'vcores') + '</th><th>Action</th>';
+  updateSortIndicators();
+}
+
+function getHistoricalDataSet() {
+  return RM_HISTORICAL_RANKING_DATA[rmHistoryRange] || RM_HISTORICAL_RANKING_DATA['7d'];
+}
+
+function getHistoricalTaskRows() {
+  var data = getHistoricalDataSet();
+  return data.workflow.reduce(function(rows, workflow) {
+    return rows.concat((workflow.tasks || []).map(function(task) {
+      return Object.assign({ workflowCode: workflow.code, workflowName: workflow.name }, task);
+    }));
+  }, []);
+}
+
+function getRankingRowsSource() {
+  if (rmRankingScope === 'historical') {
+    return rmRankingMode === 'workflow' ? getHistoricalDataSet().workflow : getHistoricalTaskRows();
+  }
+  return RM_RANKING_DATA[rmRankingMode];
+}
+
+function matchesQueueFilter(row, queueType, queues) {
+  var sameType = !queueType || String(row.queueType || '').toLowerCase() === String(queueType).toLowerCase();
+  var selectedQueues = Array.isArray(queues) ? queues : String(queues || '').split(',').filter(Boolean);
+  var sameQueue = !selectedQueues.length || selectedQueues.indexOf(row.queue) >= 0;
+  return sameType && sameQueue;
+}
+
+function matchesWorkflowQueue(row, queueType, queues) {
+  if (rmRankingMode !== 'workflow') return matchesQueueFilter(row, queueType, queues);
+  if (!queueType && (!queues || !queues.length)) return true;
+  var tasks = row.tasks || [];
+  return matchesQueueFilter(row, queueType, queues) || tasks.some(function(task) {
+    return matchesQueueFilter(task, queueType, queues);
+  });
+}
+
+function getFilteredRankingRows() {
+  var nameEl = document.getElementById('rmNameFilter') || document.getElementById('rmTaskNameFilter');
+  var workflowEl = document.getElementById('rmWorkflowFilter');
+  var codeEl = document.getElementById('rmCodeFilter');
+  var ownerEl = document.getElementById('rmOwnerFilter');
+  var queueTypeEl = document.getElementById('rmQueueTypeFilter');
+  var queueEl = document.getElementById('rmQueueFilter');
+  var individualEl = document.getElementById('rmIndividualFilter');
+  var name = ((nameEl && nameEl.value) || '').toLowerCase();
+  var workflow = ((workflowEl && workflowEl.value) || '').toLowerCase();
+  var code = ((codeEl && codeEl.value) || '').toLowerCase();
+  var owner = ((ownerEl && ownerEl.value) || '').toLowerCase();
+  var queueType = (queueTypeEl && queueTypeEl.value) || '';
+  var queues = ((queueEl && queueEl.value) || '').split(',').filter(Boolean);
+  var individualOnly = !!(individualEl && individualEl.checked);
+  var rows = getRankingRowsSource().filter(function(row) {
+    return (!name || row.name.toLowerCase().indexOf(name) >= 0) &&
+      (!workflow || (row.workflowName || '').toLowerCase().indexOf(workflow) >= 0) &&
+      (!code || row.code.toLowerCase().indexOf(code) >= 0) &&
+      (!owner || row.owner.toLowerCase().indexOf(owner) >= 0) &&
+      matchesWorkflowQueue(row, queueType, queues) &&
+      (!individualOnly || row.individual);
+  });
+  if (rmSortField) {
+    rows = rows.slice().sort(function(a, b) {
+      var av = Number(a[rmSortField]) || 0;
+      var bv = Number(b[rmSortField]) || 0;
+      return rmSortDir === 'asc' ? av - bv : bv - av;
+    });
+  }
+  return rows;
+}
+
+function normalizeQueueType(type) {
+  if (/batch/i.test(type || '')) return 'Batch YARN Queue';
+  if (/streaming/i.test(type || '')) return 'Streaming YARN Queue';
+  if (/presto/i.test(type || '')) return 'Presto Queue';
+  return type || '--';
+}
+
+function formatQueueResource(value, metric) {
+  var rounded = Math.round((Number(value) || 0) * 10) / 10;
+  return metric === 'memory' ? rounded + ' GB' : String(rounded);
+}
+
+function getWorkflowQueueBreakdown(row, metric) {
+  var totals = {
+    'Batch YARN Queue': 0,
+    'Streaming YARN Queue': 0,
+    'Presto Queue': 0
+  };
+  (row.tasks || []).forEach(function(task) {
+    var queueType = normalizeQueueType(task.queueType);
+    if (Object.prototype.hasOwnProperty.call(totals, queueType)) {
+      totals[queueType] += Number(task[metric]) || 0;
+    }
+  });
+  return totals;
+}
+
+function renderWorkflowResourceValue(row, metric) {
+  var title = metric === 'memory' ? 'Memory Utilization' : 'VCore Utilization';
+  var value = metric === 'memory' ? row.memoryText : row.vcoresText;
+  var totals = getWorkflowQueueBreakdown(row, metric);
+  return '<span class="rm-resource-popover-wrap">' +
+    '<span class="rm-resource-value">' + rmEscape(value) + '</span>' +
+    '<span class="rm-resource-popover">' +
+      '<strong>' + title + '</strong>' +
+      '<span>Batch YARN Queue: ' + rmEscape(formatQueueResource(totals['Batch YARN Queue'], metric)) + '</span>' +
+      '<span>Streaming YARN Queue: ' + rmEscape(formatQueueResource(totals['Streaming YARN Queue'], metric)) + '</span>' +
+      '<span>Presto Queue: ' + rmEscape(formatQueueResource(totals['Presto Queue'], metric)) + '</span>' +
+    '</span>' +
+  '</span>';
+}
+
+function renderResourceText(value) {
+  return '<span class="rm-resource-value">' + rmEscape(value) + '</span>';
+}
+
+function renderTrendAction(type, code, scope) {
+  var trendScope = scope || rmRankingScope;
+  return '<button type="button" class="rm-action-link" onclick="openTrendModal(\'' + type + '\', \'' + rmEscape(code) + '\', \'' + trendScope + '\')">Trend</button>';
+}
+
+function toggleWorkflowTasks(code) {
+  if (rmExpandedWorkflows.has(code)) {
+    rmExpandedWorkflows.delete(code);
+  } else {
+    rmExpandedWorkflows.add(code);
+  }
+  renderResourceRanking(getFilteredRankingRows());
+}
+
+function renderWorkflowTasks(row) {
+  if (rmRankingScope === 'historical') return renderHistoricalWorkflowTasks(row);
+  var tasks = row.tasks || [];
+  var body = tasks.map(function(task) {
+    return '<tr>' +
+      '<td title="' + rmEscape(task.name) + '">' + rmEscape(task.name) + '</td>' +
+      '<td><a class="rm-ranking-link" onclick="openResourceInstance(\'' + rmEscape(task.code) + '\')">' + rmEscape(task.code) + '</a></td>' +
+      '<td><span class="rm-status-pill">' + rmEscape(task.status || 'running') + '</span></td>' +
+      '<td><span class="rm-queue-chip">' + rmEscape(task.queueType) + '</span></td>' +
+      '<td title="' + rmEscape(task.queue) + '">' + rmEscape(task.queue) + '</td>' +
+      '<td>' + renderResourceText(task.memoryText) + '</td>' +
+      '<td>' + renderResourceText(task.vcoresText) + '</td>' +
+      '<td>' + renderTrendAction('task', task.code, 'running') + '</td>' +
+      '</tr>';
+  }).join('');
+  return '<tr class="rm-child-row"><td colspan="9">' +
+    '<div class="rm-child-panel">' +
+      '<table class="rm-child-table">' +
+        '<colgroup><col class="rm-child-col-task"><col class="rm-child-col-code"><col class="rm-child-col-status"><col class="rm-child-col-queue-type"><col class="rm-child-col-queue-name"><col class="rm-child-col-memory"><col class="rm-child-col-vcore"><col class="rm-child-col-action"></colgroup>' +
+        '<thead><tr><th><span class="rm-th-text">Task Name</span></th><th><span class="rm-th-text">Instance Code</span></th><th><span class="rm-th-text">Instance Status</span></th><th><span class="rm-th-text">Queue Type</span></th><th><span class="rm-th-text">Queue Name</span></th><th><span class="rm-th-text">Memory</span>' + renderInfoTip('memory') + '</th><th><span class="rm-th-text">VCores</span>' + renderInfoTip('vcores') + '</th><th><span class="rm-th-text">Action</span></th></tr></thead>' +
+        '<tbody>' + body + '</tbody>' +
+      '</table>' +
+      '<div class="rm-child-pagination"><button type="button" class="active">1</button><button type="button">2</button><button type="button">3</button><button type="button">4</button><button type="button">5</button><button type="button">›</button></div>' +
+    '</div>' +
+  '</td></tr>';
+}
+
+function renderHistoricalWorkflowTasks(row) {
+  var body = (row.tasks || []).map(function(task) {
+    return '<tr>' +
+      '<td title="' + rmEscape(task.name) + '">' + rmEscape(task.name) + '</td>' +
+      '<td title="' + rmEscape(task.owner) + '">' + rmEscape(task.owner) + '</td>' +
+      '<td><span class="rm-queue-chip">' + rmEscape(task.queueType) + '</span></td>' +
+      '<td title="' + rmEscape(task.queue) + '">' + rmEscape(task.queue) + '</td>' +
+      '<td>' + rmEscape(task.runCount) + '</td>' +
+      '<td>' + renderResourceText(task.avgMemoryText) + '</td>' +
+      '<td>' + renderResourceText(task.peakMemoryText) + '</td>' +
+      '<td>' + renderResourceText(task.avgVcoresText) + '</td>' +
+      '<td>' + renderResourceText(task.peakVcoresText) + '</td>' +
+      '<td>' + renderTrendAction('task', task.code, 'historical') + '</td>' +
+      '</tr>';
+  }).join('');
+  return '<tr class="rm-child-row historical-child-row"><td colspan="9">' +
+    '<div class="rm-child-panel">' +
+      '<table class="rm-child-table historical-child">' +
+        '<colgroup><col class="rm-h-child-col-task"><col class="rm-h-child-col-owner"><col class="rm-h-child-col-queue-type"><col class="rm-h-child-col-queue-name"><col class="rm-h-child-col-run"><col class="rm-h-child-col-avg-memory"><col class="rm-h-child-col-peak-memory"><col class="rm-h-child-col-avg-vcore"><col class="rm-h-child-col-peak-vcore"><col class="rm-h-child-col-action"></colgroup>' +
+        '<thead><tr><th><span class="rm-th-text">Task Name</span></th><th><span class="rm-th-text">Owner</span></th><th><span class="rm-th-text">Queue Type</span></th><th><span class="rm-th-text">Queue Name</span></th><th><span class="rm-th-text">Run Count</span>' + renderInfoTip('runCount') + '</th><th><span class="rm-th-text">Avg Memory</span>' + renderInfoTip('avgMemory') + '</th><th><span class="rm-th-text">Peak Memory</span>' + renderInfoTip('peakMemory') + '</th><th><span class="rm-th-text">Avg VCore</span>' + renderInfoTip('avgVcores') + '</th><th><span class="rm-th-text">Peak VCore</span>' + renderInfoTip('peakVcores') + '</th><th><span class="rm-th-text">Action</span></th></tr></thead>' +
+        '<tbody>' + body + '</tbody>' +
+      '</table>' +
+      '<div class="rm-child-pagination"><button type="button" class="active">1</button><button type="button">2</button><button type="button">3</button><button type="button">4</button><button type="button">5</button><button type="button">›</button></div>' +
+    '</div>' +
+  '</td></tr>';
+}
+
+function renderResourceRanking(rows) {
+  var body = document.getElementById('rmRankingBody');
+  var empty = document.getElementById('rmRankingEmpty');
+  if (!body || !empty) return;
+  body.innerHTML = rows.map(function(row) {
+    if (rmRankingScope === 'historical') {
+      if (rmRankingMode === 'task') {
+        return '<tr>' +
+          '<td title="' + rmEscape(row.name) + '">' + rmEscape(row.name) + '</td>' +
+          '<td title="' + rmEscape(row.workflowName || '-') + '">' + rmEscape(row.workflowName || '-') + '</td>' +
+          '<td title="' + rmEscape(row.owner) + '">' + rmEscape(row.owner) + '</td>' +
+          '<td title="' + rmEscape(row.queueType) + '">' + rmEscape(row.queueType) + '</td>' +
+          '<td title="' + rmEscape(row.queue) + '">' + rmEscape(row.queue) + '</td>' +
+          '<td>' + rmEscape(row.runCount) + '</td>' +
+          '<td>' + renderResourceText(row.avgMemoryText) + '</td>' +
+          '<td>' + renderResourceText(row.peakMemoryText) + '</td>' +
+          '<td>' + renderResourceText(row.avgVcoresText) + '</td>' +
+          '<td>' + renderResourceText(row.peakVcoresText) + '</td>' +
+          '<td>' + renderTrendAction('task', row.code, 'historical') + '</td>' +
+          '</tr>';
+      }
+      var historyExpanded = rmExpandedWorkflows.has(row.code);
+      return '<tr class="' + (historyExpanded ? 'rm-workflow-expanded' : '') + '">' +
+        '<td><button type="button" class="rm-expand-btn" onclick="toggleWorkflowTasks(\'' + rmEscape(row.code) + '\')" aria-label="' + (historyExpanded ? 'Collapse' : 'Expand') + '">' + (historyExpanded ? '−' : '+') + '</button></td>' +
+        '<td title="' + rmEscape(row.name) + '">' + rmEscape(row.name) + '</td>' +
+        '<td title="' + rmEscape(row.owner) + '">' + rmEscape(row.owner) + '</td>' +
+        '<td>' + rmEscape(row.runCount) + '</td>' +
+        '<td>' + renderResourceText(row.avgMemoryText) + '</td>' +
+        '<td>' + renderResourceText(row.peakMemoryText) + '</td>' +
+        '<td>' + renderResourceText(row.avgVcoresText) + '</td>' +
+        '<td>' + renderResourceText(row.peakVcoresText) + '</td>' +
+        '<td>' + renderTrendAction('workflow', row.code, 'historical') + '</td>' +
+        '</tr>' + (historyExpanded ? renderWorkflowTasks(row) : '');
+    }
+    if (rmRankingMode === 'task') {
+      return '<tr>' +
+        '<td title="' + rmEscape(row.name) + '">' + rmEscape(row.name) + '</td>' +
+        '<td><a class="rm-ranking-link" onclick="openResourceInstance(\'' + rmEscape(row.code) + '\')">' + rmEscape(row.code) + '</a></td>' +
+        '<td title="' + rmEscape(row.workflowName || '-') + '">' + rmEscape(row.workflowName || '-') + '</td>' +
+        '<td title="' + rmEscape(row.owner) + '">' + rmEscape(row.owner) + '</td>' +
+        '<td title="' + rmEscape(row.queueType) + '">' + rmEscape(row.queueType) + '</td>' +
+        '<td title="' + rmEscape(row.queue) + '">' + rmEscape(row.queue) + '</td>' +
+        '<td>' + renderResourceText(row.memoryText) + '</td>' +
+        '<td>' + renderResourceText(row.vcoresText) + '</td>' +
+        '<td>' + renderTrendAction('task', row.code, 'running') + '</td>' +
+        '</tr>';
+    }
+    var expanded = rmExpandedWorkflows.has(row.code);
+    return '<tr class="' + (expanded ? 'rm-workflow-expanded' : '') + '">' +
+      '<td><button type="button" class="rm-expand-btn" onclick="toggleWorkflowTasks(\'' + rmEscape(row.code) + '\')" aria-label="' + (expanded ? 'Collapse' : 'Expand') + '">' + (expanded ? '−' : '+') + '</button></td>' +
+      '<td title="' + rmEscape(row.name) + '">' + rmEscape(row.name) + '</td>' +
+      '<td><a class="rm-ranking-link" onclick="openResourceInstance(\'' + rmEscape(row.code) + '\')">' + rmEscape(row.code) + '</a></td>' +
+      '<td title="' + rmEscape(row.owner) + '">' + rmEscape(row.owner) + '</td>' +
+      '<td>' + rmEscape(row.queueType) + '</td>' +
+      '<td>' + rmEscape(row.queue) + '</td>' +
+      '<td>' + renderWorkflowResourceValue(row, 'memory') + '</td>' +
+      '<td>' + renderWorkflowResourceValue(row, 'vcores') + '</td>' +
+      '<td>' + renderTrendAction('workflow', row.code, 'running') + '</td>' +
+      '</tr>' + (expanded ? renderWorkflowTasks(row) : '');
+  }).join('');
+  empty.classList.toggle('hidden', rows.length > 0);
+}
+
+function searchResourceRanking() {
+  rmRankingVisible = true;
+  var rows = getFilteredRankingRows();
+  renderResourceRanking(rows);
+  rmNotify(rows.length ? rows.length + (rmRankingScope === 'historical' ? ' historical records found' : ' running instances found') : 'No matching data');
+}
+
+function resetRankingFilters(showMessage) {
+  ['rmNameFilter', 'rmWorkflowFilter', 'rmTaskNameFilter', 'rmCodeFilter', 'rmOwnerFilter', 'rmQueueTypeFilter', 'rmQueueFilter'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  var individual = document.getElementById('rmIndividualFilter');
+  if (individual) individual.checked = false;
+  rmSelectedQueues = [];
+  rmQueueCascadeRegion = 'ID_SeaMoney';
+  syncQueueCascadeDisplay();
+  rmRankingVisible = true;
+  setDefaultRankingSort();
+  rmExpandedWorkflows.clear();
+  updateSortIndicators();
+  renderResourceRanking(getFilteredRankingRows());
+  if (showMessage !== false) rmNotify('Filters reset');
+}
+
+function sortResourceRanking(field) {
+  if (!rmRankingVisible) rmRankingVisible = true;
+  if (rmSortField === field) {
+    rmSortDir = rmSortDir === 'desc' ? 'asc' : 'desc';
+  } else {
+    rmSortField = field;
+    rmSortDir = 'desc';
+  }
+  updateSortIndicators();
+  renderResourceRanking(getFilteredRankingRows());
+}
+
+function updateSortIndicators() {
+  document.querySelectorAll('#rmRankingHead .rm-sort').forEach(function(btn) {
+    var icon = btn.querySelector('.rm-sort-dir');
+    var active = btn.getAttribute('data-sort-field') === rmSortField;
+    btn.classList.toggle('active', active);
+    if (icon) icon.textContent = active ? (rmSortDir === 'asc' ? '↑' : '↓') : '↕';
+  });
+}
+
+function openResourceInstance(code) {
+  rmNotify('Opening instance ' + code);
+  switchView('view-detail');
+}
+
+function findHistoricalTrendItem(type, code) {
+  var data = getHistoricalDataSet();
+  if (type === 'workflow') {
+    var workflow = data.workflow.find(function(row) { return row.code === code; });
+    return workflow ? { type: 'workflow', item: workflow, scope: 'historical', range: rmHistoryRange } : null;
+  }
+  for (var i = 0; i < data.workflow.length; i += 1) {
+    var parent = data.workflow[i];
+    var child = (parent.tasks || []).find(function(row) { return row.code === code; });
+    if (child) return { type: 'task', item: Object.assign({ workflowCode: parent.code, workflowName: parent.name }, child), parent: parent, scope: 'historical', range: rmHistoryRange };
+  }
+  return null;
+}
+
+function findTrendItem(type, code, scope) {
+  if (scope === 'historical') return findHistoricalTrendItem(type, code);
+  if (type === 'workflow') {
+    var workflow = RM_RANKING_DATA.workflow.find(function(row) { return row.code === code; });
+    return workflow ? { type: 'workflow', item: workflow, scope: 'running' } : null;
+  }
+  var task = RM_RANKING_DATA.task.find(function(row) { return row.code === code; });
+  if (task) return { type: 'task', item: task, scope: 'running' };
+  for (var i = 0; i < RM_RANKING_DATA.workflow.length; i += 1) {
+    var parent = RM_RANKING_DATA.workflow[i];
+    var child = (parent.tasks || []).find(function(row) { return row.code === code; });
+    if (child) return { type: 'task', item: child, parent: parent, scope: 'running' };
+  }
+  return null;
+}
+
+function openTrendModal(type, code, scope) {
+  var context = findTrendItem(type, code, scope || rmRankingScope);
+  if (!context) {
+    rmNotify('Trend data not found');
+    return;
+  }
+  rmTrendContext = context;
+  rmTrendRange = 'week';
+  rmTrendCustomStart = '';
+  rmTrendCustomEnd = '';
+  document.getElementById('rmTrendModal').classList.remove('hidden');
+  renderTrendModal();
+}
+
+function closeTrendModal() {
+  var modal = document.getElementById('rmTrendModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function switchTrendRange(btn, range) {
+  rmTrendRange = range;
+  document.querySelectorAll('.rm-trend-controls button').forEach(function(item) {
+    item.classList.toggle('active', item === btn);
+  });
+  renderTrendModal();
+}
+
+function getHistoryRangeLabel(range) {
+  if (range === '30d') return 'Last 30 Days';
+  if (range === 'custom') return 'Custom';
+  return 'Last 7 Days';
+}
+
+function getScheduleFrequencyLabel(schedule) {
+  var text = String(schedule || '').toLowerCase();
+  if (text.indexOf('monthly') >= 0) return 'Monthly';
+  if (text.indexOf('weekly') >= 0) return 'Weekly';
+  if (text.indexOf('minutely') >= 0 || text.indexOf('minute') >= 0) return 'Minutely';
+  if (text.indexOf('hourly') >= 0) return 'Hourly';
+  return 'Daily';
+}
+
+function isTrendCustomRangeSupported(frequency) {
+  return frequency === 'Weekly' || frequency === 'Monthly';
+}
+
+function getTrendBaseDate() {
+  return new Date(2026, 4, 21, 0, 0, 0);
+}
+
+function formatDateInputValue(date) {
+  return date.getFullYear() + '-' + padDatePart(date.getMonth() + 1) + '-' + padDatePart(date.getDate());
+}
+
+function parseDateInputValue(value) {
+  if (!value) return null;
+  var parts = String(value).split('-').map(Number);
+  if (parts.length !== 3 || parts.some(function(part) { return isNaN(part); })) return null;
+  return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0);
+}
+
+function getTrendSelectableBounds(frequency) {
+  var max = getTrendBaseDate();
+  var min = new Date(max.getTime());
+  if (frequency === 'Monthly') {
+    min = new Date(max.getFullYear(), max.getMonth() - 5, 1, 0, 0, 0);
+  } else if (frequency === 'Weekly') {
+    min.setMonth(min.getMonth() - 3);
+  }
+  return { min: min, max: max };
+}
+
+function clampTrendDate(date, frequency, fallback) {
+  if (!date) return fallback;
+  var bounds = getTrendSelectableBounds(frequency);
+  if (date < bounds.min) return new Date(bounds.min.getTime());
+  if (date > bounds.max) return new Date(bounds.max.getTime());
+  return date;
+}
+
+function setTrendDatePickerLimits(frequency) {
+  var bounds = getTrendSelectableBounds(frequency);
+  var supportsCustom = isTrendCustomRangeSupported(frequency);
+  ['rmTrendStartNative', 'rmTrendEndNative'].forEach(function(id) {
+    var input = document.getElementById(id);
+    if (!input) return;
+    if (supportsCustom) {
+      input.min = formatDateInputValue(bounds.min);
+      input.max = formatDateInputValue(bounds.max);
+    } else {
+      input.removeAttribute('min');
+      input.removeAttribute('max');
+    }
+  });
+}
+
+function syncTrendDatePicker(displayId, nativeId) {
+  if (!rmTrendContext) return;
+  var frequency = getScheduleFrequencyLabel(rmTrendContext.item.schedule);
+  if (!isTrendCustomRangeSupported(frequency)) return;
+  syncDatePicker(displayId, nativeId, false);
+  rmTrendCustomStart = (document.getElementById('rmTrendStartDate') || {}).value || '';
+  rmTrendCustomEnd = (document.getElementById('rmTrendEndDate') || {}).value || '';
+  rmTrendRange = 'custom';
+  renderTrendModal();
+}
+
+function padDatePart(value) {
+  return value < 10 ? '0' + value : String(value);
+}
+
+function formatTrendLabel(date, frequency) {
+  var month = padDatePart(date.getMonth() + 1);
+  var day = padDatePart(date.getDate());
+  if (frequency === 'Minutely') return month + '/' + day + ' ' + padDatePart(date.getHours()) + ':' + padDatePart(date.getMinutes());
+  if (frequency === 'Hourly') return month + '/' + day + ' ' + padDatePart(date.getHours()) + ':00';
+  if (frequency === 'Monthly') return date.getFullYear() + '-' + month;
+  return month + '/' + day + ' 00:00';
+}
+
+function getTrendDateBounds(schedule) {
+  var frequency = getScheduleFrequencyLabel(schedule);
+  var end = getTrendBaseDate();
+  var start = new Date(end.getTime());
+  if (rmTrendRange === 'custom' && isTrendCustomRangeSupported(frequency)) {
+    var bounds = getTrendSelectableBounds(frequency);
+    var customEnd = clampTrendDate(parseDateInputValue(rmTrendCustomEnd), frequency, bounds.max);
+    var customStart = clampTrendDate(parseDateInputValue(rmTrendCustomStart), frequency, bounds.min);
+    start = customStart;
+    end = customEnd;
+    if (start > end) start = new Date(end.getTime());
+    return { start: start, end: end };
+  }
+  var daysBack = rmTrendRange === 'month' ? 29 : 6;
+  start.setDate(end.getDate() - daysBack);
+  return { start: start, end: end };
+}
+
+function buildTrendLabels(schedule) {
+  var frequency = getScheduleFrequencyLabel(schedule);
+  var bounds = getTrendDateBounds(schedule);
+  var labels = [];
+  var cursor = new Date(bounds.start.getTime());
+  if (frequency === 'Monthly') {
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth(), 1, 0, 0, 0);
+    while (cursor <= bounds.end) {
+      labels.push(formatTrendLabel(cursor, frequency));
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return labels.length ? labels : [formatTrendLabel(bounds.end, frequency)];
+  }
+  if (frequency === 'Weekly') {
+    while (cursor <= bounds.end) {
+      labels.push(formatTrendLabel(cursor, frequency));
+      cursor.setDate(cursor.getDate() + 7);
+    }
+    return labels.length ? labels : [formatTrendLabel(bounds.end, frequency)];
+  }
+  if (frequency === 'Hourly') {
+    var hourlyStep = rmTrendRange === 'month' ? 48 : 24;
+    while (cursor <= bounds.end) {
+      labels.push(formatTrendLabel(cursor, frequency));
+      cursor.setHours(cursor.getHours() + hourlyStep);
+    }
+    return labels.length ? labels : [formatTrendLabel(bounds.end, frequency)];
+  }
+  if (frequency === 'Minutely') {
+    var minuteStep = rmTrendRange === 'month' ? 1440 : 360;
+    while (cursor <= bounds.end) {
+      labels.push(formatTrendLabel(cursor, frequency));
+      cursor.setMinutes(cursor.getMinutes() + minuteStep);
+    }
+    return labels.length ? labels : [formatTrendLabel(bounds.end, frequency)];
+  }
+  while (cursor <= bounds.end) {
+    labels.push(formatTrendLabel(cursor, frequency));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return labels;
+}
+
+function buildTrendSeries(item) {
+  var labels = buildTrendLabels(item.schedule);
+  var memoryBase = Number(item.memory != null ? item.memory : item.avgMemory) || 1;
+  var vcoreBase = Number(item.vcores != null ? item.vcores : item.avgVcores) || 1;
+  return {
+    labels: labels,
+    memory: labels.map(function(label, index) {
+      var factor = Math.max(.16, 1 - index * (rmTrendRange === 'month' ? .025 : .08));
+      return Math.max(.2, +(memoryBase * factor + (index % 2 ? .15 : 0)).toFixed(1));
+    }),
+    vcores: labels.map(function(label, index) {
+      var factor = Math.max(.16, 1 - index * (rmTrendRange === 'month' ? .024 : .075));
+      return Math.max(.2, +(vcoreBase * factor + (index % 3 === 0 ? .4 : 0)).toFixed(1));
+    })
+  };
+}
+
+function renderUsageChart(el, labels, values) {
+  if (!el) return;
+  var maxValue = Math.max.apply(null, values);
+  var axisMax = Math.max(5, Math.ceil((maxValue * 1.15) / 5) * 5);
+  var ticks = [axisMax, axisMax * .8, axisMax * .6, axisMax * .4, axisMax * .2, 0];
+  var yAxis = ticks.map(function(tick) {
+    return '<span>' + (Math.round(tick * 10) / 10).toString() + '</span>';
+  }).join('');
+  var bars = values.map(function(value, index) {
+    var height = Math.max(3, Math.round((value / axisMax) * 100));
+    var labelStep = labels.length > 14 ? Math.ceil(labels.length / 10) : 1;
+    var label = index % labelStep === 0 ? labels[index] : '';
+    return '<div class="rm-chart-bar-wrap"><div class="rm-chart-bar" title="' + rmEscape(labels[index] + ': ' + value) + '" style="height:' + height + '%"></div><span>' + rmEscape(label) + '</span></div>';
+  }).join('');
+  el.innerHTML = '<div class="rm-chart-yaxis">' + yAxis + '</div><div class="rm-chart-plot"><div class="rm-chart-grid"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="rm-chart-bars">' + bars + '</div></div>';
+}
+
+function renderTrendModal() {
+  if (!rmTrendContext) return;
+  var item = rmTrendContext.item;
+  var frequency = getScheduleFrequencyLabel(item.schedule);
+  var name = item.workflowName && rmTrendContext.type === 'task' ? item.workflowName + ' / ' + item.name : item.name;
+  document.getElementById('rmTrendName').textContent = name;
+  document.getElementById('rmTrendSchedule').textContent = frequency;
+  var controls = document.querySelector('.rm-trend-controls');
+  var supportsCustom = isTrendCustomRangeSupported(frequency);
+  if (!supportsCustom && rmTrendRange === 'custom') rmTrendRange = 'week';
+  if (controls) {
+    controls.classList.toggle('no-custom', !supportsCustom);
+    controls.classList.toggle('with-custom', supportsCustom);
+  }
+  setTrendDatePickerLimits(frequency);
+  document.querySelectorAll('.rm-trend-controls button').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-trend-range') === rmTrendRange);
+  });
+  var trendStart = document.getElementById('rmTrendStartDate');
+  var trendEnd = document.getElementById('rmTrendEndDate');
+  var trendStartNative = document.getElementById('rmTrendStartNative');
+  var trendEndNative = document.getElementById('rmTrendEndNative');
+  if (trendStart && trendEnd) {
+    var startValue = supportsCustom && rmTrendRange === 'custom' ? rmTrendCustomStart : '';
+    var endValue = supportsCustom && rmTrendRange === 'custom' ? rmTrendCustomEnd : '';
+    if (supportsCustom && rmTrendRange === 'custom') {
+      var bounds = getTrendSelectableBounds(frequency);
+      var startDate = clampTrendDate(parseDateInputValue(startValue), frequency, bounds.min);
+      var endDate = clampTrendDate(parseDateInputValue(endValue), frequency, bounds.max);
+      if (startDate > endDate) startDate = new Date(endDate.getTime());
+      startValue = formatDateInputValue(startDate);
+      endValue = formatDateInputValue(endDate);
+      rmTrendCustomStart = startValue;
+      rmTrendCustomEnd = endValue;
+    }
+    trendStart.value = startValue;
+    trendEnd.value = endValue;
+    if (trendStartNative) trendStartNative.value = startValue;
+    if (trendEndNative) trendEndNative.value = endValue;
+  }
+  var series = buildTrendSeries(item);
+  renderUsageChart(document.getElementById('rmMemoryChart'), series.labels, series.memory);
+  renderUsageChart(document.getElementById('rmVcoreChart'), series.labels, series.vcores);
+}
+
+function handleResourceAction(action, code) {
+  if (action === 'Adjust') {
+    rmNotify('Adjustment panel opened for ' + code);
+  } else {
+    openResourceInstance(code);
+  }
+}
+
+function initResourceMonitor() {
+  renderQueueResource();
+  applyQueueFilters();
+  renderRankingControls();
+  renderRankingHeader();
+  if (!rmSortField) {
+    rmSortField = 'vcores';
+    rmSortDir = 'desc';
+  }
+  renderResourceRanking(getFilteredRankingRows());
+  updateSortIndicators();
+}
+
+switchView('view-tasklist');
+</script>
 </body>
 </html>
