@@ -1222,7 +1222,7 @@
         <div class="rm-bar-chart" id="rmMemoryChart"></div>
       </div>
       <div class="rm-chart-block">
-        <div class="rm-chart-title">VCore Utilization</div>
+        <div class="rm-chart-title">CPU Time</div>
         <div class="rm-bar-chart" id="rmVcoreChart"></div>
       </div>
     </div>
@@ -1537,6 +1537,30 @@ const RM_HISTORICAL_RANKING_DATA = {
   }
 };
 
+function formatCpuTime(value) {
+  var minutes = Number(value) || 0;
+  if (minutes >= 60) return (Math.round((minutes / 60) * 10) / 10) + ' h';
+  return (Math.round(minutes * 10) / 10) + ' min';
+}
+
+function enrichHistoricalCpuMetrics() {
+  Object.keys(RM_HISTORICAL_RANKING_DATA).forEach(function(rangeKey) {
+    (RM_HISTORICAL_RANKING_DATA[rangeKey].workflow || []).forEach(function(workflow) {
+      var rows = [workflow].concat(workflow.tasks || []);
+      rows.forEach(function(row) {
+        row.avgCpuTime = Number(row.avgVcores) || 0;
+        row.maxCpuTime = Number(row.peakVcores) || 0;
+        row.totalCpuTime = Math.round(row.avgCpuTime * (Number(row.runCount) || 0) * 10) / 10;
+        row.avgCpuTimeText = formatCpuTime(row.avgCpuTime);
+        row.maxCpuTimeText = formatCpuTime(row.maxCpuTime);
+        row.totalCpuTimeText = formatCpuTime(row.totalCpuTime);
+      });
+    });
+  });
+}
+
+enrichHistoricalCpuMetrics();
+
 let rmCurrentRegion = 'SG';
 let rmQueueDimension = 'project';
 let rmCurrentRange = 'Last 1 Hour';
@@ -1658,7 +1682,7 @@ function applyQueueFilters() {
 }
 
 function getDefaultRankingSortField() {
-  return rmRankingScope === 'historical' ? 'avgVcores' : 'vcores';
+  return rmRankingScope === 'historical' ? 'totalCpuTime' : 'vcores';
 }
 
 function setDefaultRankingSort() {
@@ -1961,8 +1985,9 @@ const RM_SORT_TIPS = {
   runCount: 'Number of successful instances in the selected time range.',
   avgMemory: 'Average of each successful instance peak memory in the selected time range.',
   peakMemory: 'Highest peak memory among successful instances in the selected time range.',
-  avgVcores: 'Average of each successful instance peak VCore usage in the selected time range.',
-  peakVcores: 'Highest peak VCore usage among successful instances in the selected time range.',
+  avgCpuTime: 'Average CPU time of successful instances in the selected time range.',
+  maxCpuTime: 'Maximum CPU time among successful instances in the selected time range.',
+  totalCpuTime: 'Sum of CPU time across successful instances in the selected time range.',
   memory: 'Current memory usage of the running instance.',
   vcores: 'Current VCore usage of the running instance.'
 };
@@ -1996,7 +2021,8 @@ function renderRankingHeader() {
         '<th>Task Name</th><th>Workflow Name</th><th>Owner</th><th>Queue Type</th><th>Queue Name</th>' +
         '<th>' + renderSortButton('Run Count', 'runCount') + '</th>' +
         '<th>' + renderSortButton('Avg Memory', 'avgMemory') + '</th><th>' + renderSortButton('Peak Memory', 'peakMemory') + '</th>' +
-        '<th>' + renderSortButton('Avg VCore', 'avgVcores') + '</th><th>' + renderSortButton('Peak VCore', 'peakVcores') + '</th><th>Action</th>';
+        '<th>' + renderSortButton('Avg CPU Time', 'avgCpuTime') + '</th><th>' + renderSortButton('Max CPU Time', 'maxCpuTime') + '</th>' +
+        '<th>' + renderSortButton('Total CPU Time', 'totalCpuTime') + '</th><th>Action</th>';
       updateSortIndicators();
       return;
     }
@@ -2004,7 +2030,8 @@ function renderRankingHeader() {
       '<th></th><th>Workflow Name</th><th>Owner</th>' +
       '<th>' + renderSortButton('Run Count', 'runCount') + '</th>' +
       '<th>' + renderSortButton('Avg Memory', 'avgMemory') + '</th><th>' + renderSortButton('Peak Memory', 'peakMemory') + '</th>' +
-      '<th>' + renderSortButton('Avg VCore', 'avgVcores') + '</th><th>' + renderSortButton('Peak VCore', 'peakVcores') + '</th><th>Action</th>';
+      '<th>' + renderSortButton('Avg CPU Time', 'avgCpuTime') + '</th><th>' + renderSortButton('Max CPU Time', 'maxCpuTime') + '</th>' +
+      '<th>' + renderSortButton('Total CPU Time', 'totalCpuTime') + '</th><th>Action</th>';
     updateSortIndicators();
     return;
   }
@@ -2189,16 +2216,17 @@ function renderHistoricalWorkflowTasks(row) {
       '<td>' + rmEscape(task.runCount) + '</td>' +
       '<td>' + renderResourceText(task.avgMemoryText) + '</td>' +
       '<td>' + renderResourceText(task.peakMemoryText) + '</td>' +
-      '<td>' + renderResourceText(task.avgVcoresText) + '</td>' +
-      '<td>' + renderResourceText(task.peakVcoresText) + '</td>' +
+      '<td>' + renderResourceText(task.avgCpuTimeText) + '</td>' +
+      '<td>' + renderResourceText(task.maxCpuTimeText) + '</td>' +
+      '<td>' + renderResourceText(task.totalCpuTimeText) + '</td>' +
       '<td>' + renderTrendAction('task', task.code, 'historical') + '</td>' +
       '</tr>';
   }).join('');
-  return '<tr class="rm-child-row historical-child-row"><td colspan="9">' +
+  return '<tr class="rm-child-row historical-child-row"><td colspan="10">' +
     '<div class="rm-child-panel">' +
       '<table class="rm-child-table historical-child">' +
-        '<colgroup><col class="rm-h-child-col-task"><col class="rm-h-child-col-owner"><col class="rm-h-child-col-queue-type"><col class="rm-h-child-col-queue-name"><col class="rm-h-child-col-run"><col class="rm-h-child-col-avg-memory"><col class="rm-h-child-col-peak-memory"><col class="rm-h-child-col-avg-vcore"><col class="rm-h-child-col-peak-vcore"><col class="rm-h-child-col-action"></colgroup>' +
-        '<thead><tr><th><span class="rm-th-text">Task Name</span></th><th><span class="rm-th-text">Owner</span></th><th><span class="rm-th-text">Queue Type</span></th><th><span class="rm-th-text">Queue Name</span></th><th><span class="rm-th-text">Run Count</span>' + renderInfoTip('runCount') + '</th><th><span class="rm-th-text">Avg Memory</span>' + renderInfoTip('avgMemory') + '</th><th><span class="rm-th-text">Peak Memory</span>' + renderInfoTip('peakMemory') + '</th><th><span class="rm-th-text">Avg VCore</span>' + renderInfoTip('avgVcores') + '</th><th><span class="rm-th-text">Peak VCore</span>' + renderInfoTip('peakVcores') + '</th><th><span class="rm-th-text">Action</span></th></tr></thead>' +
+        '<colgroup><col class="rm-h-child-col-task"><col class="rm-h-child-col-owner"><col class="rm-h-child-col-queue-type"><col class="rm-h-child-col-queue-name"><col class="rm-h-child-col-run"><col class="rm-h-child-col-avg-memory"><col class="rm-h-child-col-peak-memory"><col class="rm-h-child-col-avg-cpu"><col class="rm-h-child-col-max-cpu"><col class="rm-h-child-col-total-cpu"><col class="rm-h-child-col-action"></colgroup>' +
+        '<thead><tr><th><span class="rm-th-text">Task Name</span></th><th><span class="rm-th-text">Owner</span></th><th><span class="rm-th-text">Queue Type</span></th><th><span class="rm-th-text">Queue Name</span></th><th><span class="rm-th-text">Run Count</span>' + renderInfoTip('runCount') + '</th><th><span class="rm-th-text">Avg Memory</span>' + renderInfoTip('avgMemory') + '</th><th><span class="rm-th-text">Peak Memory</span>' + renderInfoTip('peakMemory') + '</th><th><span class="rm-th-text">Avg CPU Time</span>' + renderInfoTip('avgCpuTime') + '</th><th><span class="rm-th-text">Max CPU Time</span>' + renderInfoTip('maxCpuTime') + '</th><th><span class="rm-th-text">Total CPU Time</span>' + renderInfoTip('totalCpuTime') + '</th><th><span class="rm-th-text">Action</span></th></tr></thead>' +
         '<tbody>' + body + '</tbody>' +
       '</table>' +
       '<div class="rm-child-pagination"><button type="button" class="active">1</button><button type="button">2</button><button type="button">3</button><button type="button">4</button><button type="button">5</button><button type="button">›</button></div>' +
@@ -2222,8 +2250,9 @@ function renderResourceRanking(rows) {
           '<td>' + rmEscape(row.runCount) + '</td>' +
           '<td>' + renderResourceText(row.avgMemoryText) + '</td>' +
           '<td>' + renderResourceText(row.peakMemoryText) + '</td>' +
-          '<td>' + renderResourceText(row.avgVcoresText) + '</td>' +
-          '<td>' + renderResourceText(row.peakVcoresText) + '</td>' +
+          '<td>' + renderResourceText(row.avgCpuTimeText) + '</td>' +
+          '<td>' + renderResourceText(row.maxCpuTimeText) + '</td>' +
+          '<td>' + renderResourceText(row.totalCpuTimeText) + '</td>' +
           '<td>' + renderTrendAction('task', row.code, 'historical') + '</td>' +
           '</tr>';
       }
@@ -2235,8 +2264,9 @@ function renderResourceRanking(rows) {
         '<td>' + rmEscape(row.runCount) + '</td>' +
         '<td>' + renderResourceText(row.avgMemoryText) + '</td>' +
         '<td>' + renderResourceText(row.peakMemoryText) + '</td>' +
-        '<td>' + renderResourceText(row.avgVcoresText) + '</td>' +
-        '<td>' + renderResourceText(row.peakVcoresText) + '</td>' +
+        '<td>' + renderResourceText(row.avgCpuTimeText) + '</td>' +
+        '<td>' + renderResourceText(row.maxCpuTimeText) + '</td>' +
+        '<td>' + renderResourceText(row.totalCpuTimeText) + '</td>' +
         '<td>' + renderTrendAction('workflow', row.code, 'historical') + '</td>' +
         '</tr>' + (historyExpanded ? renderWorkflowTasks(row) : '');
     }
@@ -2534,7 +2564,7 @@ function buildTrendLabels(schedule) {
 function buildTrendSeries(item) {
   var labels = buildTrendLabels(item.schedule);
   var memoryBase = Number(item.memory != null ? item.memory : item.avgMemory) || 1;
-  var vcoreBase = Number(item.vcores != null ? item.vcores : item.avgVcores) || 1;
+  var cpuBase = Number(item.avgCpuTime != null ? item.avgCpuTime : (item.vcores != null ? item.vcores : item.avgVcores)) || 1;
   return {
     labels: labels,
     memory: labels.map(function(label, index) {
@@ -2543,7 +2573,7 @@ function buildTrendSeries(item) {
     }),
     vcores: labels.map(function(label, index) {
       var factor = Math.max(.16, 1 - index * (rmTrendRange === 'month' ? .024 : .075));
-      return Math.max(.2, +(vcoreBase * factor + (index % 3 === 0 ? .4 : 0)).toFixed(1));
+      return Math.max(.2, +(cpuBase * factor + (index % 3 === 0 ? .4 : 0)).toFixed(1));
     })
   };
 }
