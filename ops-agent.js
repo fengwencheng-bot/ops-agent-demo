@@ -2456,15 +2456,18 @@ function switchSession(el, convId) {
 function buildWelcomeCardHtml() {
   return '<div class="welcome-card">' +
     '<div class="wc-hero">' +
-      '<div class="wc-hero-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="#fff"><path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5z"/><path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" opacity=".8"/><path d="M6 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" opacity=".5"/></svg></div>' +
-      '<div class="wc-hero-text">Hi, I\'m your <b>Scheduler Agent</b></div>' +
+      '<div class="wc-badge">Diana 2.0 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3h7v7"/><path d="M10 14L21 3"/><path d="M21 14v7h-7"/><path d="M3 10V3h7"/><path d="M3 21l7-7"/></svg></div>' +
+      '<div class="wc-avatar"><img src="welcome-avatar.png" alt="Scheduler Agent avatar"/></div>' +
+      '<div class="wc-headline">Hi, I\'m your <span>Scheduler Agent</span></div>' +
+      '<div class="wc-desc">I can identify anomalous instances, diagnose failures and pinpoint root causes, answer questions about tasks and instances in natural language, and execute ops actions like rerun or backfill on your behalf.</div>' +
     '</div>' +
-    '<div class="wc-desc">I can identify anomalous instances, diagnose failures and pinpoint root causes, answer questions about tasks and instances in natural language, and execute ops actions like rerun or backfill on your behalf.</div>' +
-    '<div class="wc-try-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Try asking me</div>' +
+    '<div class="wc-body">' +
+    '<div class="wc-try-title"><span class="wc-spark">✦</span><span class="wc-spark wc-spark-sm">✦</span>Try telling me:</div>' +
     '<div class="wc-examples">' +
-      '<div class="wc-example" onclick="fillInput(\'Diagnose why instance di_scheduler.studio_6801187_20260403_DAY_2 failed\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg><span>Diagnose why instance studio_6801187_DAY_2 failed</span></div>' +
-      '<div class="wc-example" onclick="fillInput(\'Show upstream and downstream dependencies for task update_table\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2" style="flex-shrink:0"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg><span>Show dependencies for task update_table</span></div>' +
-      '<div class="wc-example" onclick="fillInput(\'Any anomalies in today\\\'s task runs?\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FA8C16" stroke-width="2" style="flex-shrink:0"><path d="M18 20V10M12 20V4M6 20v-6"/></svg><span>Any anomalies in today\'s task runs?</span></div>' +
+      '<div class="wc-example" onclick="fillInput(\'Diagnose why instance di_scheduler.studio_6801187_20260403_DAY_2 failed\')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#52C41A" stroke-width="2" style="flex-shrink:0"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path><path d="M11 8v6"></path><path d="M8 11h6"></path></svg><span>Diagnose why instance failed</span></div>' +
+      '<div class="wc-example" onclick="fillInput(\'Show upstream and downstream dependencies for task update_table\')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4C6FFF" stroke-width="2" style="flex-shrink:0"><circle cx="5" cy="6" r="2"></circle><circle cx="19" cy="6" r="2"></circle><circle cx="19" cy="18" r="2"></circle><path d="M7 6h10"></path><path d="M7 7.5l10 8.5"></path><path d="M19 8v8"></path></svg><span>Show dependencies for task update_table</span></div>' +
+      '<div class="wc-example" onclick="fillInput(\'Any anomalies in today\\\'s task runs?\')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FA8C16" stroke-width="2" style="flex-shrink:0"><path d="M13 2L4 14h7l-1 8 9-12h-7z"></path></svg><span>Any anomalies in today\'s task runs?</span></div>' +
+    '</div>' +
     '</div>' +
   '</div>';
 }
