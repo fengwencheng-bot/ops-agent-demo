@@ -15,6 +15,7 @@ cp "$PROJECT_DIR/ops-agent-mockup.html" "$APP_DIR/ops-agent-mockup.html"
 cp "$PROJECT_DIR/ops-agent.js" "$APP_DIR/ops-agent.js"
 cp "$PROJECT_DIR/ops-agent.css" "$APP_DIR/ops-agent.css"
 cp "$PROJECT_DIR/index.html" "$APP_DIR/index.html"
+cp "$PROJECT_DIR/welcome-avatar.png" "$APP_DIR/welcome-avatar.png"
 
 echo "ops-agent runtime synced"
 echo "App: $APP_DIR"

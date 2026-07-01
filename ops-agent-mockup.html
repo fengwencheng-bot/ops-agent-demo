@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Scheduler Agent v3 — Cursor Paradigm</title>
-<link rel="stylesheet" href="ops-agent.css?v=20260423v4">
+<link rel="stylesheet" href="ops-agent.css?v=20260626v6">
 <style>
 /* Inline overrides only — main styles in ops-agent.css */
 </style>
@@ -43,6 +43,7 @@
     <div class="sb-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>Task Governance</div>
     <div class="sb-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>Workflows</div>
     <div class="sb-item active" id="nav-sched" onclick="switchView('view-tasklist')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Scheduled Tasks</div>
+    <div class="sb-item" id="nav-skill" onclick="switchView('view-skill-list')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h16"/><path d="M14 12l2-2 2 2"/></svg>Skills</div>
     <div class="sb-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15h6"/></svg>Manual Tasks</div>
     <div class="sb-item" id="nav-instances" onclick="switchView('view-all-instances')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>All Instances</div>
     <div class="sb-item" id="nav-rerun" onclick="switchView('view-rerun-list')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>Rerun &amp; Backfill</div>
@@ -149,6 +150,7 @@
           <div>No Data</div>
         </div>
       </div>
+      <div class="rm-ranking-pagination" id="rmRankingPagination"></div>
     </section>
   </div>
 
@@ -171,6 +173,31 @@
     <tbody id="task-list-tbody"></tbody>
   </table>
   <div class="pagination"><div class="pg-left">Batch Operate <svg width="10" height="6" fill="#8C8C8C"><path d="M0 0l5 5 5-5"/></svg></div><div class="pg-right"><span id="task-list-count">0 Results</span><button class="pg-btn disabled">&lt;</button><button class="pg-btn active">1</button><button class="pg-btn">&gt;</button><span>30/page</span></div></div>
+</div>
+
+<div class="left-view skill-library-page" id="view-skill-list">
+  <div class="skill-library-shell">
+    <div class="skill-library-head">
+      <div>
+        <div class="skill-library-title">Scheduler Agent Skills</div>
+        <div class="skill-library-subtitle">View, create, edit, disable, and delete reusable agent workflows.</div>
+      </div>
+      <button type="button" class="skill-library-close" onclick="closeSkillLibrary()" aria-label="Back">×</button>
+    </div>
+    <div class="skill-library-toolbar">
+      <div class="skill-library-toolbar-left">
+        <div class="skill-list-tabs" role="tablist" aria-label="Skill type filter">
+          <button type="button" class="skill-list-tab active" data-skill-filter="all" onclick="switchSkillListFilter('all')">All</button>
+          <button type="button" class="skill-list-tab" data-skill-filter="personal" onclick="switchSkillListFilter('personal')">Personal</button>
+          <button type="button" class="skill-list-tab" data-skill-filter="project" onclick="switchSkillListFilter('project')">Project</button>
+        </div>
+      </div>
+      <button type="button" class="skill-small-btn primary skill-create-btn" onclick="openNewSkillModal()">+ Create Skill</button>
+    </div>
+    <div class="skill-library-table-wrap">
+      <div class="skill-list-rows" id="skillListTable"></div>
+    </div>
+  </div>
 </div>
 
 <!-- VIEW 2: Instance Detail - Details Tab -->
@@ -1186,16 +1213,41 @@
       <button type="button" class="sc-chip" onclick="smartAction('rerun')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg> Rerun</button>
       <button type="button" class="sc-chip" onclick="smartAction('dependency')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg> Dependency</button>
     </div>
-    <div class="input-tip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>For more accurate responses, include the <strong>task code</strong> or <strong>task instance code</strong> in your question.</div>
     <div class="input-row">
       <input class="chat-input" id="chatInput" placeholder="Ask a question or enter an ops command..." onkeydown="handleInputKeydown(event)"/>
       <button type="button" class="send-btn" onclick="simulateSend()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
     </div>
-    <div class="input-hint">Enter to send · ↑↓ for history · Natural language supported</div>
+    <div class="input-bottom">
+      <button type="button" class="skill-entry-btn" onclick="openSkillModal()" title="Manage Scheduler Agent Skills"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8z"/><path d="M5 14h4M15 14h4M7 18h10"/></svg>Skills</button>
+      <div class="input-hint">Enter to send · ↑↓ for history · Natural language supported</div>
+    </div>
+    <div class="skill-slash-picker hidden" id="skillSlashPicker"></div>
   </div>
 </div><!-- /agent-panel -->
 
 </div><!-- /layout -->
+
+<div class="modal-overlay hidden" id="skillModal" onclick="if(event.target===this)closeSkillModal()">
+  <div class="skill-form-modal-host" role="dialog" aria-modal="true" aria-labelledby="skillFormModalTitle">
+    <div id="skillModalBody"></div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="skillDeleteModal" onclick="if(event.target===this)closeSkillDeleteModal()">
+  <div class="skill-delete-modal" role="dialog" aria-modal="true" aria-labelledby="skillDeleteTitle">
+    <div class="skill-delete-head">
+      <div class="skill-delete-icon" aria-hidden="true">!</div>
+      <div>
+        <div class="skill-delete-title" id="skillDeleteTitle">Delete Skill</div>
+        <div class="skill-delete-subtitle" id="skillDeleteSubtitle">The skill is using in all projects. Deletion cannot be recovered. Are you sure to delete the skill?</div>
+      </div>
+    </div>
+    <div class="skill-delete-foot">
+      <button type="button" class="skill-delete-btn secondary" onclick="closeSkillDeleteModal()">Cancel</button>
+      <button type="button" class="skill-delete-btn danger" id="skillDeleteConfirmBtn" onclick="confirmDeleteSkill()">Delete</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-overlay hidden" id="rmTrendModal" onclick="if(event.target===this)closeTrendModal()">
   <div class="rm-trend-modal" role="dialog" aria-modal="true" aria-labelledby="rmTrendTitle">
@@ -1229,7 +1281,7 @@
   </div>
 </div>
 
-<script src="ops-agent.js?v=20260423v3"></script>
+<script src="ops-agent.js?v=20260626v6"></script>
 <script>
 const RM_QUEUE_DATA = {
   SG: [
@@ -1572,6 +1624,8 @@ let rmRankingMode = 'workflow';
 let rmRankingVisible = true;
 let rmSortField = 'vcores';
 let rmSortDir = 'desc';
+let rmRankingPage = 1;
+let rmRankingPageSize = 10;
 let rmTrendContext = null;
 let rmTrendRange = 'week';
 let rmTrendCustomStart = '';
@@ -1598,6 +1652,10 @@ function switchView(viewId) {
     initResourceMonitor();
   } else if (viewId === 'view-tasklist') {
     document.getElementById('nav-sched').classList.add('active');
+  } else if (viewId === 'view-skill-list') {
+    var skillNav = document.getElementById('nav-skill');
+    if (skillNav) skillNav.classList.add('active');
+    renderSkillLibrary();
   }
 }
 
@@ -1648,6 +1706,7 @@ function selectQueueFromUsage(queueName) {
   if (rankingSelect) rankingSelect.value = getSelectedQueueNames().join(',');
   syncQueueCascadeDisplay();
   applyQueueFilters();
+  resetRankingPage();
   renderResourceRanking(getFilteredRankingRows());
   updateSortIndicators();
   rmNotify('Queue selected: ' + queueName);
@@ -1726,6 +1785,7 @@ function switchRankingMode(btn, mode) {
 function switchHistoryRange(btn, range, silent) {
   rmHistoryRange = range;
   setDefaultRankingSort();
+  resetRankingPage();
   rmExpandedWorkflows.clear();
   if (btn) {
     btn.parentElement.querySelectorAll('[data-history-range]').forEach(function(item) { item.classList.toggle('active', item === btn); });
@@ -1758,6 +1818,7 @@ function activateCustomHistoryRange() {
   if (rmHistoryRange !== 'custom') {
     switchHistoryRange(customBtn, 'custom', true);
   } else {
+    resetRankingPage();
     renderResourceRanking(getFilteredRankingRows());
     updateSortIndicators();
   }
@@ -1883,6 +1944,7 @@ function toggleQueueCascadeRegion(event, region) {
     });
   }
   syncQueueCascadeDisplay();
+  resetRankingPage();
   renderResourceRanking(getFilteredRankingRows());
   updateSortIndicators();
 }
@@ -1897,6 +1959,7 @@ function selectQueueCascadeValue(event, region, queue) {
     rmSelectedQueues.push(key);
   }
   syncQueueCascadeDisplay();
+  resetRankingPage();
   renderResourceRanking(getFilteredRankingRows());
   updateSortIndicators();
 }
@@ -1906,6 +1969,7 @@ function removeQueueCascadeValue(event, key) {
   var index = rmSelectedQueues.indexOf(key);
   if (index >= 0) rmSelectedQueues.splice(index, 1);
   syncQueueCascadeDisplay();
+  resetRankingPage();
   renderResourceRanking(getFilteredRankingRows());
   updateSortIndicators();
 }
@@ -2234,11 +2298,69 @@ function renderHistoricalWorkflowTasks(row) {
   '</td></tr>';
 }
 
+function resetRankingPage() {
+  rmRankingPage = 1;
+}
+
+function getRankingTotalPages(total) {
+  return Math.max(1, Math.ceil(total / rmRankingPageSize));
+}
+
+function getRankingPageRows(rows) {
+  var totalPages = getRankingTotalPages(rows.length);
+  rmRankingPage = Math.min(Math.max(1, rmRankingPage), totalPages);
+  var start = (rmRankingPage - 1) * rmRankingPageSize;
+  return rows.slice(start, start + rmRankingPageSize);
+}
+
+function getRankingPageNumbers(totalPages) {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, function(_, index) { return index + 1; });
+  }
+  var start = Math.max(1, Math.min(rmRankingPage - 2, totalPages - 4));
+  return Array.from({ length: 5 }, function(_, index) { return start + index; });
+}
+
+function renderRankingPagination(total) {
+  var pager = document.getElementById('rmRankingPagination');
+  if (!pager) return;
+  var totalPages = getRankingTotalPages(total);
+  rmRankingPage = Math.min(Math.max(1, rmRankingPage), totalPages);
+  var prevDisabled = total === 0 || rmRankingPage <= 1;
+  var nextDisabled = total === 0 || rmRankingPage >= totalPages;
+  var pageButtons = getRankingPageNumbers(totalPages).map(function(page) {
+    return '<button type="button" class="rm-page-btn' + (page === rmRankingPage ? ' active' : '') + '" onclick="setRankingPage(' + page + ')">' + page + '</button>';
+  }).join('');
+  pager.innerHTML =
+    '<span class="rm-page-total">' + total + ' Search Results</span>' +
+    '<button type="button" class="rm-page-btn arrow" aria-label="Previous page" onclick="setRankingPage(' + (rmRankingPage - 1) + ')"' + (prevDisabled ? ' disabled' : '') + '>‹</button>' +
+    pageButtons +
+    '<button type="button" class="rm-page-btn arrow" aria-label="Next page" onclick="setRankingPage(' + (rmRankingPage + 1) + ')"' + (nextDisabled ? ' disabled' : '') + '>›</button>' +
+    '<label class="rm-page-size-field" aria-label="Page size"><select onchange="changeRankingPageSize(this.value)">' +
+      [10, 20, 50].map(function(size) {
+        return '<option value="' + size + '"' + (size === rmRankingPageSize ? ' selected' : '') + '>' + size + ' / page</option>';
+      }).join('') +
+    '</select></label>';
+}
+
+function setRankingPage(page) {
+  var rows = getFilteredRankingRows();
+  rmRankingPage = Math.min(Math.max(1, Number(page) || 1), getRankingTotalPages(rows.length));
+  renderResourceRanking(rows);
+}
+
+function changeRankingPageSize(value) {
+  rmRankingPageSize = Number(value) || 10;
+  resetRankingPage();
+  renderResourceRanking(getFilteredRankingRows());
+}
+
 function renderResourceRanking(rows) {
   var body = document.getElementById('rmRankingBody');
   var empty = document.getElementById('rmRankingEmpty');
   if (!body || !empty) return;
-  body.innerHTML = rows.map(function(row) {
+  var pageRows = getRankingPageRows(rows);
+  body.innerHTML = pageRows.map(function(row) {
     if (rmRankingScope === 'historical') {
       if (rmRankingMode === 'task') {
         return '<tr>' +
@@ -2297,10 +2419,12 @@ function renderResourceRanking(rows) {
       '</tr>' + (expanded ? renderWorkflowTasks(row) : '');
   }).join('');
   empty.classList.toggle('hidden', rows.length > 0);
+  renderRankingPagination(rows.length);
 }
 
 function searchResourceRanking() {
   rmRankingVisible = true;
+  resetRankingPage();
   var rows = getFilteredRankingRows();
   renderResourceRanking(rows);
   rmNotify(rows.length ? rows.length + (rmRankingScope === 'historical' ? ' historical records found' : ' running instances found') : 'No matching data');
@@ -2318,6 +2442,7 @@ function resetRankingFilters(showMessage) {
   syncQueueCascadeDisplay();
   rmRankingVisible = true;
   setDefaultRankingSort();
+  resetRankingPage();
   rmExpandedWorkflows.clear();
   updateSortIndicators();
   renderResourceRanking(getFilteredRankingRows());
@@ -2326,6 +2451,7 @@ function resetRankingFilters(showMessage) {
 
 function sortResourceRanking(field) {
   if (!rmRankingVisible) rmRankingVisible = true;
+  resetRankingPage();
   if (rmSortField === field) {
     rmSortDir = rmSortDir === 'desc' ? 'asc' : 'desc';
   } else {

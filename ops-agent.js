@@ -336,14 +336,143 @@ let currentContext = createEmptyContext();
 let inputHistory = [];
 let inputHistoryIdx = -1;
 let sessionSeq = 0;
+let lastInstanceSearchResult = null;
+let lastTaskSearchResult = null;
+let batchRerunState = {};
+let batchFreezeState = {};
 
 const SESSION_STORAGE_KEY = 'ops-agent-sessions';
 const SESSION_MAX = 100;
 const SESSION_EXPIRE_DAYS = 30;
 const SESSION_AUTO_DELETE_DAYS = 90;
-const SESSION_PRESET_IDS = ['conv-welcome', 'conv-failure', 'conv-info', 'conv-backfill', 'conv-large-dep'];
+const SESSION_PRESET_IDS = ['conv-welcome', 'conv-failure', 'conv-info', 'conv-backfill', 'conv-large-dep', 'conv-alarm-diagnosis'];
 const SESSION_SHARE_VERSION = 1;
 var currentShareDialog = { sessionId: null, url: '' };
+
+const SKILL_STORAGE_KEY = 'ops-agent-skills';
+const SKILL_DATA_VERSION = 1;
+
+const AGENT_TOOL_REGISTRY = [
+  { name: 'get_task_info', label: 'Task Info', readOnly: true, objectType: 'task' },
+  { name: 'get_project_tasks', label: 'Project Tasks', readOnly: true, objectType: 'project' },
+  { name: 'get_instance_history', label: 'Instance History', readOnly: true, objectType: 'instance' },
+  { name: 'get_publish_info', label: 'Publish Info', readOnly: true, objectType: 'task' },
+  { name: 'get_latest_trial_run', label: 'Trial Run', readOnly: true, objectType: 'task' },
+  { name: 'get_dqc_result', label: 'DQC Result', readOnly: true, objectType: 'task' },
+  { name: 'get_data_quality_summary', label: 'Data Quality Summary', readOnly: true, objectType: 'task' },
+  { name: 'get_alarm_setting', label: 'Alarm Setting', readOnly: true, objectType: 'task' },
+  { name: 'get_dependency_status', label: 'Dependency Status', readOnly: true, objectType: 'task' },
+  { name: 'freeze_task', label: 'Freeze Task', readOnly: false, objectType: 'task' },
+  { name: 'rerun_instance', label: 'Rerun Instance', readOnly: false, objectType: 'instance' },
+  { name: 'update_alarm_policy', label: 'Update Alarm Policy', readOnly: false, objectType: 'task' }
+];
+
+const DEFAULT_SKILLS = [
+  {
+    id: 'skill-release-check',
+    name: 'Pre-schedule Release Check',
+    description: 'Check newly published tasks before first scheduled run and summarize readiness risks.',
+    creator: 'current.user@shopee.com',
+    enabled: true,
+    activeVersionId: 'skill-release-check-v2',
+    latestVersionId: 'skill-release-check-v2',
+    skillType: 'project',
+    appliedProjects: ['di_scheduler (Current)', 'order_mart', 'deadline'],
+    versions: [
+      {
+        id: 'skill-release-check-v2',
+        versionNo: 2,
+        status: 'active',
+        mode: 'read_only',
+        scope: 'project',
+        allowedTools: ['get_project_tasks', 'get_publish_info', 'get_latest_trial_run', 'get_dqc_result', 'get_data_quality_summary', 'get_alarm_setting'],
+        outputType: 'check_result',
+        intentExamples: ['pre-schedule release check', '正式调度前校验', '新发布任务校验'],
+        instructionBody: 'For newly published scheduled tasks before their first scheduled run, check trial run, DQC, data result abnormality, and task-level alarm setting. Return conclusion, check results, risks, unknowns, and suggested actions.',
+        createdAt: '2026-04-03T10:00:00.000Z',
+        updatedAt: '2026-04-03T10:00:00.000Z'
+      }
+    ]
+  },
+  {
+    id: 'skill-task-scan',
+    name: 'Project Task Scan',
+    description: 'Scan current project tasks by status, owner, or naming rule and return a concise summary.',
+    creator: 'current.user@shopee.com',
+    enabled: true,
+    activeVersionId: 'skill-task-scan-v1',
+    latestVersionId: 'skill-task-scan-v1',
+    skillType: 'project',
+    appliedProjects: ['di_scheduler (Current)', 'project reporting', 'task governance'],
+    versions: [
+      {
+        id: 'skill-task-scan-v1',
+        versionNo: 1,
+        status: 'active',
+        mode: 'read_only',
+        scope: 'project',
+        allowedTools: ['get_project_tasks', 'get_task_info'],
+        outputType: 'task_list',
+        intentExamples: ['scan tasks in current project', 'list tasks by rule', '扫描项目下任务'],
+        instructionBody: 'Scan tasks in the current project by a user-provided rule such as status, owner, schedule, naming pattern, or alarm coverage. Return a compact list and recommended follow-up operations, without performing any operation automatically.',
+        createdAt: '2026-04-03T10:30:00.000Z',
+        updatedAt: '2026-04-03T10:30:00.000Z'
+      }
+    ]
+  },
+  {
+    id: 'skill-missing-alarm',
+    name: 'Find Tasks Missing Alarm',
+    description: 'Find tasks in current project without task failure alarm and recommend alarm setup.',
+    creator: 'current.user@shopee.com',
+    enabled: false,
+    activeVersionId: null,
+    latestVersionId: 'skill-missing-alarm-v1',
+    skillType: 'project',
+    appliedProjects: ['di_scheduler (Current)', 'alarm policy'],
+    versions: [
+      {
+        id: 'skill-missing-alarm-v1',
+        versionNo: 1,
+        status: 'pending_review',
+        mode: 'read_only',
+        scope: 'project',
+        allowedTools: ['get_project_tasks', 'get_alarm_setting'],
+        outputType: 'task_list',
+        intentExamples: ['missing alarm', 'without alarm', '未配置告警', '没有告警'],
+        instructionBody: 'Find tasks in the current project without task failure alarm. Return a task list with owner, risk reason, and suggested action to review alarm setup.',
+        createdAt: '2026-04-03T10:10:00.000Z',
+        updatedAt: '2026-04-03T10:10:00.000Z'
+      }
+    ]
+  },
+  {
+    id: 'skill-long-running',
+    name: 'Long-running Instance Finder',
+    description: 'Find instances running longer than a threshold today.',
+    creator: 'current.user@shopee.com',
+    enabled: false,
+    activeVersionId: null,
+    latestVersionId: 'skill-long-running-v1',
+    skillType: 'personal',
+    appliedProjects: ['di_scheduler (Current)', 'instance monitor'],
+    versions: [
+      {
+        id: 'skill-long-running-v1',
+        versionNo: 1,
+        status: 'reject',
+        mode: 'read_only',
+        scope: 'project',
+        allowedTools: ['get_instance_history', 'get_task_info'],
+        outputType: 'instance_list',
+        intentExamples: ['long running instances', '运行超过 2 小时', 'instances running longer than 2 hours'],
+        instructionBody: 'Find today instances that are still running for more than 2 hours. Return instance list, task owner, duration, and suggested follow-up.',
+        createdAt: '2026-04-03T10:20:00.000Z',
+        updatedAt: '2026-04-03T10:20:00.000Z'
+      }
+    ]
+  }
+];
 
 const SessionManager = {
   data: { version: 1, activeSessionId: null, sessions: [] },
@@ -368,7 +497,8 @@ const SessionManager = {
       { id: 'conv-failure', title: 'Instance Failure · update_table', icon: 'diagnosis', autoTitle: false, relMs: -3600000, context: normalizeContext({ taskName: 'update_table', taskCode: null, instanceId: 'di_scheduler.studio_6801187_20260403_DAY_2' }), preferredView: 'view-detail' },
       { id: 'conv-info', title: 'Info Query · update_table', icon: 'query', autoTitle: false, relMs: -7200000, context: normalizeContext({ taskName: 'update_table', taskCode: null, instanceId: null }), preferredView: 'view-task-code' },
       { id: 'conv-backfill', title: 'Backfill · update_table', icon: 'operation', autoTitle: false, relMs: -86400000, context: normalizeContext({ taskName: 'update_table', taskCode: 'di_scheduler.studio_6801187', instanceId: null }), preferredView: 'view-taskview-matrix' },
-      { id: 'conv-large-dep', title: 'Deps · etl_data_warehouse', icon: 'query', autoTitle: false, relMs: -5400000, context: normalizeContext({ taskName: 'etl_data_warehouse', taskCode: 'di_scheduler.studio_7700001', instanceId: null }), preferredView: 'view-lineage' }
+      { id: 'conv-large-dep', title: 'Deps · etl_data_warehouse', icon: 'query', autoTitle: false, relMs: -5400000, context: normalizeContext({ taskName: 'etl_data_warehouse', taskCode: 'di_scheduler.studio_7700001', instanceId: null }), preferredView: 'view-lineage' },
+      { id: 'conv-alarm-diagnosis', title: 'Alarm Diagnosis · update_table', icon: 'diagnosis', autoTitle: false, relMs: -1800000, context: normalizeContext({ taskName: 'update_table', taskCode: 'di_scheduler.studio_6801187', instanceId: null }), preferredView: 'view-taskview-alarm', messages: function(t) { return buildAlarmDiagnosisPresetMessages(t); } }
     ];
     for (var i = 0; i < presets.length; i++) {
       var p = presets[i];
@@ -379,9 +509,18 @@ const SessionManager = {
         existing.icon = p.icon;
         existing.context = normalizeContext(p.context);
         existing.preferredView = p.preferredView;
+        if (typeof p.messages === 'function') {
+          var existingT = existing.createdAt || new Date(base + p.relMs).toISOString();
+          var refreshedMessages = p.messages(existingT);
+          var refreshedLastMsg = refreshedMessages.length > 0 ? refreshedMessages[refreshedMessages.length - 1] : null;
+          existing.messages = refreshedMessages;
+          existing.lastPreview = refreshedLastMsg ? String(refreshedLastMsg.content || '').replace(/<[^>]*>/g, '').substring(0, 60) : '';
+        }
         continue;
       }
       var t = new Date(base + p.relMs).toISOString();
+      var presetMessages = typeof p.messages === 'function' ? p.messages(t) : (p.messages || []);
+      var lastPresetMsg = presetMessages.length > 0 ? presetMessages[presetMessages.length - 1] : null;
       this.data.sessions.push({
         id: p.id,
         title: p.title,
@@ -392,8 +531,8 @@ const SessionManager = {
         pinned: false,
         context: normalizeContext(p.context),
         preferredView: p.preferredView,
-        messages: [],
-        lastPreview: ''
+        messages: presetMessages,
+        lastPreview: lastPresetMsg ? String(lastPresetMsg.content || '').replace(/<[^>]*>/g, '').substring(0, 60) : ''
       });
     }
   },
@@ -536,11 +675,283 @@ const SessionManager = {
   }
 };
 
+const CURRENT_DEMO_USER = 'current.user@shopee.com';
+
+const SkillManager = {
+  data: { version: SKILL_DATA_VERSION, activeSkillId: 'skill-release-check', skills: [] },
+
+  init: function() {
+    var raw = null;
+    try { raw = localStorage.getItem(SKILL_STORAGE_KEY); } catch (e) {}
+    if (raw) {
+      try { this.data = JSON.parse(raw); } catch (e2) { this.data = { version: SKILL_DATA_VERSION, activeSkillId: 'skill-release-check', skills: [] }; }
+    }
+    if (!this.data || !Array.isArray(this.data.skills)) this.data = { version: SKILL_DATA_VERSION, activeSkillId: 'skill-release-check', skills: [] };
+    this.ensureDefaultSkills();
+    this.data.skills.forEach(function(skill) {
+      if (!skill.creator) skill.creator = CURRENT_DEMO_USER;
+      if (!skill.latestVersionId && Array.isArray(skill.versions) && skill.versions.length) {
+        skill.latestVersionId = skill.versions[skill.versions.length - 1].id;
+      }
+      if (!skill.activeVersionId && Array.isArray(skill.versions) && skill.versions.length) {
+        var active = skill.versions.find(function(v) { return v.status === 'active'; });
+        if (active) skill.activeVersionId = active.id;
+      }
+    });
+    if (!this.data.activeSkillId || !this.getSkill(this.data.activeSkillId)) {
+      this.data.activeSkillId = this.data.skills.length ? this.data.skills[0].id : null;
+    }
+    this.save();
+  },
+
+  ensureDefaultSkills: function() {
+    for (var i = 0; i < DEFAULT_SKILLS.length; i++) {
+      var sample = cloneSkill(DEFAULT_SKILLS[i]);
+      var existing = this.getSkill(sample.id);
+      if (!existing) {
+        this.data.skills.push(sample);
+      } else {
+        if (!existing.name) existing.name = sample.name;
+        if (!existing.description) existing.description = sample.description;
+        if (!existing.creator) existing.creator = sample.creator;
+        if (existing.enabled === undefined) existing.enabled = sample.enabled;
+        if (!existing.activeVersionId) existing.activeVersionId = sample.activeVersionId;
+        if (!existing.latestVersionId) existing.latestVersionId = sample.latestVersionId;
+        if (!existing.skillType) existing.skillType = sample.skillType;
+        if (!Array.isArray(existing.editors) || !existing.editors.length) existing.editors = sample.editors;
+        if (!Array.isArray(existing.appliedProjects) || !existing.appliedProjects.length) existing.appliedProjects = sample.appliedProjects;
+        if (!Array.isArray(existing.versions) || !existing.versions.length) existing.versions = sample.versions;
+      }
+    }
+  },
+
+  save: function() {
+    try { localStorage.setItem(SKILL_STORAGE_KEY, JSON.stringify(this.data)); } catch (e) {}
+  },
+
+  list: function() {
+    return this.data.skills.slice();
+  },
+
+  getSkill: function(id) {
+    return this.data.skills.find(function(s) { return s.id === id; }) || null;
+  },
+
+  setActiveSkill: function(id) {
+    this.data.activeSkillId = id;
+    this.save();
+  },
+
+  getVersion: function(skill, versionId) {
+    if (!skill || !Array.isArray(skill.versions)) return null;
+    return skill.versions.find(function(v) { return v.id === versionId; }) || null;
+  },
+
+  getLatestVersion: function(skill) {
+    if (!skill || !Array.isArray(skill.versions) || !skill.versions.length) return null;
+    if (skill.latestVersionId) {
+      var latest = this.getVersion(skill, skill.latestVersionId);
+      if (latest) return latest;
+    }
+    return skill.versions.slice().sort(function(a, b) { return (b.versionNo || 1) - (a.versionNo || 1); })[0] || null;
+  },
+
+  getActiveVersion: function(skill) {
+    if (!skill || !skill.activeVersionId) return null;
+    var v = this.getVersion(skill, skill.activeVersionId);
+    return v && v.status === 'active' ? v : null;
+  },
+
+  getDisplayVersion: function(skill) {
+    return this.getLatestVersion(skill) || this.getActiveVersion(skill);
+  },
+
+  getCurrentEditVersion: function(skill) {
+    var latest = this.getLatestVersion(skill);
+    if (!latest) return this.getActiveVersion(skill);
+    if (latest.status === 'active') return latest;
+    return latest;
+  },
+
+  buildSubmissionVersion: function(skill, fields, sourceVersion) {
+    fields = fields || {};
+    var now = new Date().toISOString();
+    var versions = Array.isArray(skill.versions) ? skill.versions : [];
+    var nextNo = versions.length ? Math.max.apply(null, versions.map(function(v) { return v.versionNo || 1; })) + 1 : 1;
+    var base = sourceVersion ? cloneSkill(sourceVersion) : {
+      mode: 'read_only',
+      scope: fields.scope || 'project',
+      allowedTools: fields.allowedTools || ['get_project_tasks', 'get_task_info'],
+      outputType: fields.outputType || 'summary',
+      intentExamples: fields.intentExamples || [],
+      instructionBody: fields.instructionBody || 'Describe the input scope, rules, expected result, and recommended actions.'
+    };
+    var version = Object.assign({}, base, {
+      id: skill.id + '-v' + nextNo,
+      versionNo: nextNo,
+      status: 'pending',
+      validationResult: null,
+      trialRunResult: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    if (fields.mode !== undefined) version.mode = fields.mode;
+    if (fields.scope !== undefined) version.scope = fields.scope;
+    if (fields.allowedTools !== undefined) version.allowedTools = fields.allowedTools;
+    if (fields.outputType !== undefined) version.outputType = fields.outputType;
+    if (fields.intentExamples !== undefined) version.intentExamples = fields.intentExamples;
+    if (fields.instructionBody !== undefined) version.instructionBody = fields.instructionBody;
+    return version;
+  },
+
+  applySubmissionResult: function(skill, version, validation, previousActiveId) {
+    skill.versions.push(version);
+    skill.latestVersionId = version.id;
+    version.validationResult = validation;
+    version.updatedAt = new Date().toISOString();
+    if (validation.result === 'pass') {
+      if (previousActiveId && previousActiveId !== version.id) {
+        var old = this.getVersion(skill, previousActiveId);
+        if (old) old.status = 'archived';
+      }
+      version.status = 'active';
+      skill.activeVersionId = version.id;
+      skill.enabled = true;
+    } else if (validation.result === 'review') {
+      version.status = 'pending_review';
+      if (!previousActiveId) skill.activeVersionId = null;
+    } else {
+      version.status = 'reject';
+      if (!previousActiveId) skill.activeVersionId = null;
+    }
+    if (!skill.creator) skill.creator = CURRENT_DEMO_USER;
+    if (skill.activeVersionId) {
+      skill.enabled = skill.enabled !== false;
+    } else if (version.status !== 'active') {
+      skill.enabled = false;
+    }
+    this.save();
+    return version;
+  },
+
+  createSkill: function(fields) {
+    fields = fields || {};
+    var now = new Date().toISOString();
+    var id = 'skill-' + Date.now();
+    var skill = {
+      id: id,
+      name: fields.name || 'Untitled Skill',
+      description: fields.description || 'Describe what this skill should retrieve, check, summarize, or recommend.',
+      creator: fields.creator || CURRENT_DEMO_USER,
+      enabled: true,
+      activeVersionId: null,
+      latestVersionId: null,
+      skillType: fields.skillType || 'project',
+      editors: fields.editors || [CURRENT_DEMO_USER],
+      appliedProjects: fields.appliedProjects || ['di_scheduler'],
+      versions: []
+    };
+    var version = this.buildSubmissionVersion(skill, fields, null);
+    var validation = validateSkillVersion(skill, version);
+    this.applySubmissionResult(skill, version, validation, null);
+    this.data.skills.unshift(skill);
+    this.data.activeSkillId = id;
+    this.save();
+    return skill;
+  },
+
+  updateSkill: function(skillId, fields, baseVersionId) {
+    var skill = this.getSkill(skillId);
+    if (!skill) return null;
+    var base = baseVersionId ? this.getVersion(skill, baseVersionId) : this.getCurrentEditVersion(skill);
+    if (!base) return null;
+    var previousActiveId = skill.activeVersionId;
+    var version = this.buildSubmissionVersion(skill, fields, base);
+    var validation = validateSkillVersion(skill, version);
+    if (fields.name !== undefined) skill.name = fields.name || 'Untitled Skill';
+    if (fields.description !== undefined) skill.description = fields.description || '';
+    if (fields.skillType !== undefined) skill.skillType = fields.skillType || 'project';
+    if (fields.editors !== undefined) skill.editors = fields.editors || [];
+    if (fields.appliedProjects !== undefined) skill.appliedProjects = fields.appliedProjects || ['di_scheduler'];
+    this.applySubmissionResult(skill, version, validation, previousActiveId);
+    return version;
+  },
+
+  deleteSkill: function(skillId) {
+    var before = this.data.skills.length;
+    this.data.skills = this.data.skills.filter(function(skill) { return skill.id !== skillId; });
+    if (this.data.activeSkillId === skillId) {
+      this.data.activeSkillId = this.data.skills.length ? this.data.skills[0].id : null;
+    }
+    this.save();
+    return this.data.skills.length < before;
+  },
+
+  setEnabled: function(skillId, enabled) {
+    var skill = this.getSkill(skillId);
+    if (!skill) return;
+    skill.enabled = !!enabled;
+    this.save();
+  }
+};
+
+function cloneSkill(skill) {
+  return JSON.parse(JSON.stringify(skill));
+}
+
+function getToolDef(name) {
+  return AGENT_TOOL_REGISTRY.find(function(t) { return t.name === name; }) || null;
+}
+
+function validateSkillVersion(skill, version) {
+  var block = [];
+  var review = [];
+  var pass = [];
+  var body = ((version.instructionBody || '') + ' ' + (skill.description || '')).toLowerCase();
+  if (version.mode !== 'read_only') block.push('Only read_only mode can be used in a skill.');
+  if (!version.scope) block.push('Input scope is required.');
+  if (!version.outputType) block.push('Output type is required.');
+  if (!version.instructionBody || version.instructionBody.trim().length < 20) block.push('Skill detail is too short to describe a safe workflow.');
+  if (/internal api|\/system\/|select\s+.+\s+from|insert\s+|update\s+.+set|delete\s+from|\bsql\b|rpc|shell|notebook|curl|https?:\/\//i.test(body)) block.push('Skill tries to use internal API, SQL, RPC, shell, notebook, or external URL.');
+  if (/bypass|ignore.*permission|绕过权限|忽略.*限制|token|secret|password|密钥|密码|伪造|隐藏失败|只输出.*通过/i.test(body)) block.push('Skill contains unsafe instruction text.');
+  if (/自动.*(冻结|重跑|kill|修改|提交)|auto.*(freeze|rerun|kill|update|submit)|execute.*(freeze|rerun|kill)/i.test(body)) block.push('Skill asks to execute an operation automatically.');
+  var tools = version.allowedTools || [];
+  if (!tools.length) review.push('No tools selected; system cannot verify execution path.');
+  tools.forEach(function(toolName) {
+    var tool = getToolDef(toolName);
+    if (!tool) block.push('Unknown tool: ' + toolName);
+    else if (!tool.readOnly) block.push('Write tool is not allowed in skill runtime: ' + toolName);
+  });
+  if (version.scope === 'project' && !/(current project|当前项目|newly|新发布|最近|last\s+\d+|today|今天|without|missing|超过|longer|filter|筛选|范围|上限|limit)/i.test(body)) {
+    review.push('Project-level skill does not clearly define filter, time window, or limit.');
+  }
+  if (/建议.*(冻结|重跑|修改|补充告警)|recommend.*(freeze|rerun|update|alarm)|batch freeze|batch rerun/i.test(body)) {
+    review.push('Skill contains high-risk suggested operation; reviewer should confirm action boundary.');
+  }
+  if (!block.length && !review.length) pass.push('Mode, tools, scope, text safety, and output structure are within L1/L2 boundaries.');
+  return {
+    result: block.length ? 'block' : (review.length ? 'review' : 'pass'),
+    messages: block.concat(review.length ? review : pass),
+    checkedAt: new Date().toISOString()
+  };
+}
+
 function getSessionIcon(intentType) {
+  if (/skill/.test(intentType)) return 'query';
   if (/diagnosis|search_instances/.test(intentType)) return 'diagnosis';
   if (/info_|capability/.test(intentType)) return 'query';
   if (/op_|patrol/.test(intentType)) return 'operation';
   return 'general';
+}
+
+function buildAlarmDiagnosisPresetMessages(t) {
+  var question = 'Why didn\'t task update_table send a task-level alarm for the backfill run?';
+  var answer = 'The task-level alarm was skipped because this backfill event has Individual Task Alarms disabled.';
+  var agentTime = new Date(new Date(t).getTime() + 60000).toISOString();
+  return [
+    { role: 'user', content: question, time: t },
+    { role: 'agent', content: answer, time: agentTime, html: genRuleAlarmDiagnosis(normalizeContext({ taskName: 'update_table', taskCode: 'di_scheduler.studio_6801187', instanceId: null })) }
+  ];
 }
 
 let isFloating = false;
@@ -572,6 +983,12 @@ const DEPS = {
   }
 };
 
+const TASK_SLA_MANAGERS = {
+  update_table: [{ name: 'nicholas_testing', priority: 1 }],
+  ads_order_report: [{ name: 'daily_finance_guard', priority: 2 }],
+  etl_data_warehouse: [{ name: 'warehouse_core_sla', priority: 1 }]
+};
+
 function ensureDependencySymmetry() {
   Object.keys(DEPS).forEach(function(taskName) {
     if (!DEPS[taskName]) DEPS[taskName] = { up: [], down: [] };
@@ -597,6 +1014,449 @@ function ensureDependencySymmetry() {
 }
 
 ensureDependencySymmetry();
+
+function skillVersionLabel(version) {
+  return version ? 'v' + (version.versionNo || 1) : '-';
+}
+
+function skillStatusLabel(skill, version) {
+  if (version && version.status === 'active' && skill && skill.enabled === false) return 'disabled';
+  if (!version) return 'pending_review';
+  if (version.status === 'draft') return 'pending_review';
+  return version.status;
+}
+
+function skillStatusBadge(skill, version) {
+  var status = skillStatusLabel(skill, version);
+  return '<span class="skill-status ' + status + '">' + status.replace('_', ' ') + '</span>';
+}
+
+var skillPanelState = { listVisible: false, mode: 'detail', skillId: null, versionId: null };
+var skillListFilter = 'all';
+var pendingSkillDeleteId = null;
+
+function getSkillDisplayVersion(skill) {
+  if (!skill) return null;
+  return SkillManager.getDisplayVersion(skill) || null;
+}
+
+function openSkillModal() {
+  SkillManager.init();
+  skillPanelState.listVisible = true;
+  skillPanelState.mode = 'detail';
+  skillPanelState.skillId = SkillManager.data.activeSkillId || null;
+  var initSkill = skillPanelState.skillId && SkillManager.getSkill(skillPanelState.skillId);
+  skillPanelState.versionId = initSkill && getSkillDisplayVersion(initSkill) ? getSkillDisplayVersion(initSkill).id : null;
+  switchView('view-skill-list');
+  renderSkillLibrary();
+}
+
+function closeSkillModal() {
+  var modal = document.getElementById('skillModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function closeSkillLibrary() {
+  switchView('view-tasklist');
+}
+
+function switchSkillListFilter(filter) {
+  skillListFilter = filter === 'personal' || filter === 'project' ? filter : 'all';
+  document.querySelectorAll('.skill-list-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-skill-filter') === skillListFilter);
+  });
+  renderSkillLibrary();
+}
+
+function getSkillProjectsLabel(skill) {
+  var projects = Array.isArray(skill && skill.appliedProjects) ? skill.appliedProjects.slice() : [];
+  if (!projects.length) return [];
+  var visible = projects.slice(0, 3);
+  var chips = visible.map(function(projectName, idx) {
+    var text = String(projectName || '').trim();
+    if (!text) return '';
+    return '<span class="skill-project-chip' + (idx === 0 ? ' current' : '') + '">' + escapeHtml(text) + '</span>';
+  }).filter(Boolean);
+  if (projects.length > visible.length) {
+    chips.push('<span class="skill-project-chip muted">+' + (projects.length - visible.length) + ' more</span>');
+  }
+  return chips;
+}
+
+function renderSkillStatusPill(skill, version) {
+  var status = skillStatusLabel(skill, version);
+  return '<span class="skill-row-status ' + status + '">' + status.replace('_', ' ') + '</span>';
+}
+
+function renderSkillToggle(skill, version) {
+  var enabled = skill && skill.enabled !== false;
+  var activeState = version && version.status === 'active';
+  var label = enabled ? 'On' : 'Off';
+  var disabled = activeState ? '' : ' disabled';
+  return '<button type="button" class="skill-toggle' + (enabled ? ' on' : ' off') + '" onclick="toggleSkillEnabledById(\'' + skill.id + '\')" aria-label="' + (enabled ? 'Disable' : 'Enable') + '"' + disabled + '>' +
+    '<span class="skill-toggle-track"><span class="skill-toggle-thumb"></span></span>' +
+    '<span class="skill-toggle-label">' + label + '</span>' +
+  '</button>';
+}
+
+function renderSkillRowActions(skill, version) {
+  var status = skillStatusLabel(skill, version);
+  var versionStatus = version && version.status;
+  var actions = [];
+  actions.push('<button type="button" class="skill-row-link" onclick="openSkillDetailModal(\'' + skill.id + '\')">Detail</button>');
+  if (versionStatus === 'active') {
+    actions.push('<button type="button" class="skill-row-link" onclick="openSkillUpdateModal(\'' + skill.id + '\')">Update</button>');
+    actions.push('<button type="button" class="skill-row-link danger" onclick="deleteSkillById(\'' + skill.id + '\')">Delete</button>');
+  } else if (status === 'pending_review') {
+    actions.push('<button type="button" class="skill-row-link" disabled>Update</button>');
+    actions.push('<button type="button" class="skill-row-link danger" onclick="deleteSkillById(\'' + skill.id + '\')">Delete</button>');
+  } else if (status === 'reject') {
+    actions.push('<button type="button" class="skill-row-link" onclick="openSkillUpdateModal(\'' + skill.id + '\')">Update</button>');
+    actions.push('<button type="button" class="skill-row-link danger" onclick="deleteSkillById(\'' + skill.id + '\')">Delete</button>');
+  }
+  return actions.join('');
+}
+
+function renderSkillLibrary() {
+  SkillManager.init();
+  var table = document.getElementById('skillListTable');
+  if (!table) return;
+  var skills = SkillManager.list().filter(function(skill) {
+    if (skillListFilter === 'personal') return (skill.skillType || 'project') === 'personal';
+    if (skillListFilter === 'project') return (skill.skillType || 'project') === 'project';
+    return true;
+  });
+  document.querySelectorAll('.skill-list-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-skill-filter') === skillListFilter);
+  });
+  table.innerHTML = skills.map(function(skill) {
+    var version = getSkillDisplayVersion(skill);
+    var status = skillStatusLabel(skill, version);
+    var owner = formatOwnerName(skill.creator || CURRENT_DEMO_USER);
+    var projects = getSkillProjectsLabel(skill);
+    return '<div class="skill-list-row' + (skillPanelState.skillId === skill.id ? ' active' : '') + '">' +
+      '<div class="skill-list-left">' +
+        '<div class="skill-list-headline">' +
+          '<div class="skill-list-name-wrap">' +
+            '<div class="skill-list-name">' + escapeHtml(skill.name) + '</div>' +
+            '<span class="skill-list-type">' + escapeHtml((skill.skillType || 'project').replace(/^\w/, function(c){ return c.toUpperCase(); })) + '</span>' +
+          '</div>' +
+          renderSkillStatusPill(skill, version) +
+        '</div>' +
+        '<div class="skill-list-desc">' + escapeHtml(skill.description || 'No description') + '</div>' +
+        '<div class="skill-list-projects">' + (projects.length ? projects.join('') : '<span class="skill-project-chip muted">No project bound</span>') + '</div>' +
+      '</div>' +
+      '<div class="skill-list-right">' +
+        '<div class="skill-owner"><span class="skill-owner-icon">◫</span><span>Owner: ' + escapeHtml(owner) + '</span></div>' +
+        renderSkillToggle(skill, version) +
+        '<div class="skill-row-actions">' + renderSkillRowActions(skill, version) + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function openNewSkillModal(skillId, mode) {
+  SkillManager.init();
+  skillPanelState.listVisible = true;
+  switchView('view-skill-list');
+  if (skillId && mode === 'edit') {
+    skillPanelState.mode = 'edit';
+    skillPanelState.skillId = skillId;
+    SkillManager.setActiveSkill(skillId);
+    var editSkill = SkillManager.getSkill(skillId);
+    skillPanelState.versionId = editSkill && getSkillDisplayVersion(editSkill) ? getSkillDisplayVersion(editSkill).id : null;
+  } else {
+    skillPanelState.mode = 'create';
+    skillPanelState.skillId = null;
+    skillPanelState.versionId = null;
+  }
+  var modal = document.getElementById('skillModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+  }
+  renderSkillModal();
+}
+
+function closeNewSkillModal() {
+  cancelSkillPanel();
+}
+
+function cancelSkillPanel() {
+  closeSkillModal();
+  renderSkillLibrary();
+}
+
+function selectNewSkillType(type) {
+  var chosen = type === 'personal' ? 'personal' : 'project';
+  document.querySelectorAll('.skill-type-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-skill-type') === chosen);
+  });
+  var host = document.getElementById('skillModal');
+  if (host) host.setAttribute('data-skill-type', chosen);
+}
+
+function collectNewSkillModal() {
+  var host = document.getElementById('skillModal');
+  var type = (host && host.getAttribute('data-skill-type')) || 'project';
+  var detail = (document.getElementById('skillFormDetail') || {}).value || '';
+  var name = ((document.getElementById('skillFormName') || {}).value || '').trim();
+  var desc = ((document.getElementById('skillFormDesc') || {}).value || '').trim();
+  return {
+    name: name,
+    description: desc,
+    skillType: type,
+    creator: CURRENT_DEMO_USER,
+    appliedProjects: ['di_scheduler'],
+    scope: type === 'project' ? 'project' : 'task',
+    outputType: 'summary',
+    intentExamples: desc ? [desc] : [],
+    instructionBody: detail
+  };
+}
+
+function createSkillFromNewModal() {
+  var mode = skillPanelState.mode || 'create';
+  var editSkillId = skillPanelState.skillId;
+  var editVersionId = skillPanelState.versionId;
+  var fields = collectNewSkillModal();
+  if (!fields.name) {
+    showToast('Please enter skill name');
+    return;
+  }
+  if (!fields.instructionBody || fields.instructionBody.trim().length < 20) {
+    showToast('Please describe skill detail');
+    return;
+  }
+  if (mode === 'edit' && editSkillId) {
+    var updatedVersion = SkillManager.updateSkill(editSkillId, fields, editVersionId);
+    SkillManager.setActiveSkill(editSkillId);
+    showToast('Skill updated');
+    skillPanelState.versionId = updatedVersion ? updatedVersion.id : editVersionId;
+  } else {
+    var createdSkill = SkillManager.createSkill(fields);
+    showToast(createdSkill && createdSkill.activeVersionId ? 'Skill is active' : 'Skill submitted for review');
+    skillPanelState.versionId = createdSkill && createdSkill.latestVersionId ? createdSkill.latestVersionId : null;
+  }
+  skillPanelState.mode = 'detail';
+  skillPanelState.skillId = editSkillId || SkillManager.data.activeSkillId;
+  closeSkillModal();
+  renderSkillLibrary();
+}
+
+function editSkillById(skillId) {
+  openSkillUpdateModal(skillId);
+}
+
+function deleteSkillById(skillId) {
+  var skill = SkillManager.getSkill(skillId);
+  if (!skill) return;
+  pendingSkillDeleteId = skillId;
+  var modal = document.getElementById('skillDeleteModal');
+  var subtitle = document.getElementById('skillDeleteSubtitle');
+  if (subtitle) subtitle.textContent = buildSkillDeleteSubtitle(skill);
+  if (modal) modal.classList.remove('hidden');
+}
+
+function buildSkillDeleteSubtitle(skill) {
+  var count = Array.isArray(skill && skill.appliedProjects) ? skill.appliedProjects.length : 0;
+  var projectText = skill && skill.skillType === 'personal'
+    ? 'all projects'
+    : (count <= 0 ? 'all projects' : (count === 1 ? '1 project' : count + ' projects'));
+  return 'The skill is using in ' + projectText + '. Deletion cannot be recovered. Are you sure to delete the skill?';
+}
+
+function closeSkillDeleteModal() {
+  var modal = document.getElementById('skillDeleteModal');
+  if (modal) modal.classList.add('hidden');
+  pendingSkillDeleteId = null;
+}
+
+function confirmDeleteSkill() {
+  var skillId = pendingSkillDeleteId;
+  if (!skillId) {
+    closeSkillDeleteModal();
+    return;
+  }
+  var skill = SkillManager.getSkill(skillId);
+  if (!skill) {
+    closeSkillDeleteModal();
+    return;
+  }
+  SkillManager.deleteSkill(skillId);
+  showToast('Skill deleted');
+  skillPanelState.skillId = SkillManager.data.activeSkillId || null;
+  skillPanelState.versionId = skillPanelState.skillId && SkillManager.getSkill(skillPanelState.skillId) && getSkillDisplayVersion(SkillManager.getSkill(skillPanelState.skillId)) ? getSkillDisplayVersion(SkillManager.getSkill(skillPanelState.skillId)).id : null;
+  skillPanelState.mode = 'detail';
+  renderSkillLibrary();
+  closeSkillDeleteModal();
+  closeSkillModal();
+}
+
+function toggleSkillEnabledById(skillId) {
+  var skill = SkillManager.getSkill(skillId);
+  if (!skill) return;
+  SkillManager.setEnabled(skillId, !skill.enabled);
+  showToast(skill.enabled ? 'Skill enabled' : 'Skill disabled');
+  skillPanelState.skillId = skillId;
+  var updatedSkill = SkillManager.getSkill(skillId);
+  skillPanelState.versionId = updatedSkill && getSkillDisplayVersion(updatedSkill) ? getSkillDisplayVersion(updatedSkill).id : null;
+  renderSkillLibrary();
+}
+
+function viewSkillDetail(skillId) {
+  openSkillDetailModal(skillId);
+}
+function openSkillDetailModal(skillId) {
+  SkillManager.init();
+  var skill = SkillManager.getSkill(skillId);
+  if (!skill) return;
+  skillPanelState.listVisible = true;
+  switchView('view-skill-list');
+  skillPanelState.mode = 'detail';
+  skillPanelState.skillId = skillId;
+  skillPanelState.versionId = skill.latestVersionId || (getSkillDisplayVersion(skill) && getSkillDisplayVersion(skill).id) || null;
+  renderSkillModal();
+  var modal = document.getElementById('skillModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function openSkillUpdateModal(skillId) {
+  SkillManager.init();
+  var skill = SkillManager.getSkill(skillId);
+  if (!skill) return;
+  var latest = SkillManager.getDisplayVersion(skill);
+  if (latest && latest.status === 'pending_review') {
+    showToast('Pending review skills only support detail and delete');
+    return;
+  }
+  skillPanelState.listVisible = true;
+  switchView('view-skill-list');
+  skillPanelState.mode = 'edit';
+  skillPanelState.skillId = skillId;
+  skillPanelState.versionId = skill.latestVersionId || (getSkillDisplayVersion(skill) && getSkillDisplayVersion(skill).id) || null;
+  renderSkillModal();
+  var modal = document.getElementById('skillModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function renderSkillModal() {
+  var modal = document.getElementById('skillModal');
+  var body = document.getElementById('skillModalBody');
+  if (!modal || !body) return;
+  var skill = skillPanelState.skillId ? SkillManager.getSkill(skillPanelState.skillId) : null;
+  var version = skill && skillPanelState.versionId ? SkillManager.getVersion(skill, skillPanelState.versionId) : null;
+  body.innerHTML = renderSkillForm(skill, skillPanelState.mode || 'create', version);
+  selectNewSkillType((skill && skill.skillType) || 'project');
+}
+
+function getSkillToolCheckboxes(version, readonly) {
+  var selected = {};
+  (version.allowedTools || []).forEach(function(name) { selected[name] = true; });
+  return AGENT_TOOL_REGISTRY.map(function(tool) {
+    var disabled = readonly || !tool.readOnly ? ' disabled' : '';
+    var checked = selected[tool.name] ? ' checked' : '';
+    var title = tool.readOnly ? tool.name : tool.name + ' is operation-only and cannot be used inside a skill';
+    return '<label class="skill-tool-option" title="' + escapeHtml(title) + '">' +
+      '<input type="checkbox" name="skillTool" value="' + escapeHtml(tool.name) + '"' + checked + disabled + '>' +
+      '<span>' + escapeHtml(tool.label) + '</span>' +
+      (!tool.readOnly ? '<em>operation</em>' : '') +
+    '</label>';
+  }).join('');
+}
+
+function renderSkillForm(skill, mode, version) {
+  var isDetail = mode === 'detail';
+  var isEdit = mode === 'edit';
+  var dataSkill = skill || { name: '', description: '', creator: CURRENT_DEMO_USER, skillType: 'project', appliedProjects: ['di_scheduler'] };
+  var versionData = version || getSkillDisplayVersion(dataSkill) || { scope: 'project', outputType: 'summary', intentExamples: [], instructionBody: '' };
+  var title = isDetail ? 'Skill Detail' : (isEdit ? 'Edit Skill' : 'New Skill');
+  var subtitle = isDetail ? 'Review the skill settings and latest submission status.' : (isEdit ? 'Edit the latest version and submit the update for automatic validation.' : 'Create a reusable Scheduler skill, then submit it for automatic validation.');
+  var currentType = dataSkill.skillType || 'project';
+  var statusBanner = isDetail ? '<div class="skill-status-banner ' + skillStatusLabel(skill, versionData) + '">' +
+      '<strong>' + escapeHtml(skillStatusLabel(skill, versionData).replace('_', ' ')) + '</strong>' +
+      '<span>Latest version v' + escapeHtml(String(versionData.versionNo || 1)) + ' · Creator ' + escapeHtml(formatOwnerName(dataSkill.creator || CURRENT_DEMO_USER)) + '</span>' +
+    '</div>' : '';
+  var readonly = isDetail ? ' disabled' : '';
+  var footerButtons = isDetail
+    ? '<button type="button" class="skill-form-btn secondary" onclick="closeSkillModal()">Close</button>'
+    : '<button type="button" class="skill-form-btn secondary" onclick="closeSkillModal()">Cancel</button><button type="button" class="skill-form-btn primary" onclick="createSkillFromNewModal()">' + (isEdit ? 'Submit' : 'Submit') + '</button>';
+  var formNote = '<div class="skill-form-note">Create and update will submit the current content directly. The system then validates the skill and moves it to active, pending review, or reject.</div>';
+  return '<div class="skill-form-modal-shell" data-skill-type="' + escapeHtml(currentType) + '">' +
+    '<div class="skill-form-modal-head">' +
+      '<div class="skill-form-modal-title-wrap"><div class="skill-form-modal-title">' + title + '</div><div class="skill-form-modal-subtitle">' + subtitle + '</div></div>' +
+      '<button type="button" class="skill-form-modal-close" onclick="closeSkillModal()" aria-label="Close">×</button>' +
+    '</div>' +
+    '<div class="skill-form-modal-body">' +
+      statusBanner +
+      '<label class="skill-field required"><span>Skill name :</span><input id="skillFormName" class="skill-input" placeholder="Input" value="' + escapeHtml(dataSkill.name || '') + '"' + readonly + '></label>' +
+      '<label class="skill-field required"><span>Skill Description :</span><textarea id="skillFormDesc" class="skill-textarea" placeholder="Please input skill description"' + readonly + '>' + escapeHtml(dataSkill.description || '') + '</textarea></label>' +
+      '<label class="skill-field required"><span>Skill Detail :</span>' +
+        '<div class="skill-code-editor">' +
+          '<div class="skill-code-gutter">' + [1,2,3,4,5,6,7,8,9,10,11,12].map(function(n){ return '<div>' + n + '</div>'; }).join('') + '</div>' +
+          '<textarea id="skillFormDetail" class="skill-code-textarea" placeholder="Describe what you want this skill to accomplish, for example:\n## purpose\nExplain the business question this skill should answer.\n## trigger\nList example user questions that should invoke this skill.\n## input scope\nDescribe whether it works on a task, instance, workflow, or project scope.\n## workflow\nDescribe what information the Agent should retrieve, filter, judge, and summarize.\n## output format\nDescribe the expected result structure and recommended follow-up operations." ' + readonly + '>' + escapeHtml((versionData && versionData.instructionBody) || '') + '</textarea>' +
+        '</div>' +
+      '</label>' +
+      '<label class="skill-field"><span>Execution Mode :</span><div class="skill-readonly-row"><label class="skill-radio"><input type="radio" checked disabled><span>Read Only</span></label><em>Don’t perform task operations directly in a Skill.</em></div></label>' +
+      '<div class="skill-field required"><span>Type :</span><div class="skill-type-row">' +
+        '<button type="button" class="skill-type-btn' + (currentType === 'personal' ? ' active' : '') + '" data-skill-type="personal" onclick="selectNewSkillType(&quot;personal&quot;)"' + (isDetail ? ' disabled' : '') + '>Personal</button>' +
+        '<button type="button" class="skill-type-btn' + (currentType === 'project' ? ' active' : '') + '" data-skill-type="project" onclick="selectNewSkillType(&quot;project&quot;)"' + (isDetail ? ' disabled' : '') + '>Project</button>' +
+        '<span class="skill-type-hint">Applies to all users in this project.</span>' +
+      '</div></div>' +
+      '<label class="skill-field required"><span>Applied Project :</span><div class="skill-token-input"><span class="skill-token">di_scheduler (Current) ×</span><input id="skillFormProjects" placeholder="Select project"' + readonly + ' value="' + escapeHtml((dataSkill.appliedProjects || ['di_scheduler']).join(', ')) + '"></div></label>' +
+      formNote +
+    '</div>' +
+    '<div class="skill-form-modal-foot">' + footerButtons + '</div>' +
+  '</div>';
+}
+
+function collectSkillForm() {
+  var type = (document.querySelector('.skill-type-btn.active') && document.querySelector('.skill-type-btn.active').getAttribute('data-skill-type')) || 'project';
+  var detail = (document.getElementById('skillFormDetail') || {}).value || '';
+  var name = ((document.getElementById('skillFormName') || {}).value || '').trim();
+  var desc = ((document.getElementById('skillFormDesc') || {}).value || '').trim();
+  return {
+    name: name,
+    description: desc,
+    skillType: type,
+    creator: CURRENT_DEMO_USER,
+    appliedProjects: ['di_scheduler'],
+    scope: type === 'project' ? 'project' : 'task',
+    outputType: 'summary',
+    intentExamples: desc ? [desc] : [],
+    instructionBody: detail
+  };
+}
+
+function createSkillFromNewModal() {
+  var mode = skillPanelState.mode || 'create';
+  var editSkillId = skillPanelState.skillId;
+  var editVersionId = skillPanelState.versionId;
+  var fields = collectSkillForm();
+  if (!fields.name) {
+    showToast('Please enter skill name');
+    return;
+  }
+  if (!fields.instructionBody || fields.instructionBody.trim().length < 20) {
+    showToast('Please describe skill detail');
+    return;
+  }
+  if (mode === 'edit' && editSkillId) {
+    var updatedVersion = SkillManager.updateSkill(editSkillId, fields, editVersionId);
+    SkillManager.setActiveSkill(editSkillId);
+    showToast(updatedVersion && updatedVersion.status === 'active' ? 'Skill updated and activated' : (updatedVersion && updatedVersion.status === 'pending_review' ? 'Skill moved to pending review' : 'Skill rejected by automatic checks'));
+    skillPanelState.versionId = updatedVersion ? updatedVersion.id : editVersionId;
+    skillPanelState.skillId = editSkillId;
+  } else {
+    var createdSkill = SkillManager.createSkill(fields);
+    var createdVersion = createdSkill && createdSkill.latestVersionId ? SkillManager.getVersion(createdSkill, createdSkill.latestVersionId) : null;
+    showToast(createdVersion && createdVersion.status === 'active' ? 'Skill created and activated' : (createdVersion && createdVersion.status === 'pending_review' ? 'Skill moved to pending review' : 'Skill rejected by automatic checks'));
+    skillPanelState.versionId = createdSkill && createdSkill.latestVersionId ? createdSkill.latestVersionId : null;
+    skillPanelState.skillId = createdSkill ? createdSkill.id : null;
+  }
+  skillPanelState.mode = 'detail';
+  closeSkillModal();
+  renderSkillLibrary();
+}
 
 const SVG_LINK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>';
 
@@ -1648,6 +2508,8 @@ function triggerDynRerun(buttonId, name, inst) {
 
 function closeKillActionDock(uid) {
   if (uid && pendingKillOperation && pendingKillOperation.uid !== uid) return;
+  if (uid && batchRerunState[uid]) delete batchRerunState[uid];
+  if (uid && batchFreezeState[uid]) delete batchFreezeState[uid];
   pendingKillOperation = null;
   var dock = document.getElementById('killActionDock');
   var activeConv = document.querySelector('.conv-container.active');
@@ -2598,6 +3460,73 @@ function fillInput(text) {
   else if (text.endsWith(' ')) inp.setSelectionRange(inp.value.length, inp.value.length);
 }
 
+function getSlashActiveSkills(query) {
+  SkillManager.init();
+  var q = normalizeSkillText(query || '').replace(/^\/+/, '').trim();
+  var skills = SkillManager.list().filter(function(skill) {
+    return skill && skill.enabled !== false && SkillManager.getActiveVersion(skill);
+  });
+  if (q) {
+    skills = skills.filter(function(skill) {
+      var name = normalizeSkillText(skill.name);
+      var desc = normalizeSkillText(skill.description);
+      var id = normalizeSkillText(skill.id);
+      return name.indexOf(q) >= 0 || q.indexOf(name) >= 0 || desc.indexOf(q) >= 0 || id.indexOf(q) >= 0;
+    });
+  }
+  return skills.sort(function(a, b) {
+    return normalizeSkillText(a.name).localeCompare(normalizeSkillText(b.name));
+  });
+}
+
+function closeSkillSlashPicker() {
+  var box = document.getElementById('skillSlashPicker');
+  if (!box) return;
+  box.classList.add('hidden');
+  box.innerHTML = '';
+}
+
+function renderSkillSlashPicker(query) {
+  var box = document.getElementById('skillSlashPicker');
+  var input = document.getElementById('chatInput');
+  if (!box || !input) return;
+  var text = String(query || input.value || '');
+  if (!text.trim().startsWith('/')) {
+    closeSkillSlashPicker();
+    return;
+  }
+  var skills = getSlashActiveSkills(text.slice(1));
+  if (!skills.length) {
+    box.innerHTML = '<div class="skill-slash-title">No active skills found</div>';
+    box.classList.remove('hidden');
+    return;
+  }
+  box.innerHTML = '<div class="skill-slash-title">Active Skills</div>' + skills.map(function(skill) {
+    var version = SkillManager.getActiveVersion(skill);
+    return '<div class="skill-slash-item" onclick="selectSkillSlashItem(\'' + skill.id + '\')">' +
+      '<div class="skill-slash-item-main"><div class="skill-slash-item-name">/' + escapeHtml(skill.name) + '</div><div class="skill-slash-item-desc">' + escapeHtml(skill.description || 'No description') + '</div></div>' +
+      '<div class="skill-slash-item-meta"><span class="skill-status active">active</span><span class="skill-slash-pill">v' + escapeHtml(String(version && version.versionNo || 1)) + '</span></div>' +
+    '</div>';
+  }).join('');
+  box.classList.remove('hidden');
+}
+
+function selectSkillSlashItem(skillId) {
+  var skill = SkillManager.getSkill(skillId);
+  if (!skill || skill.enabled === false) return;
+  var input = document.getElementById('chatInput');
+  if (!input) return;
+  input.value = '/' + skill.name + ' ';
+  input.focus();
+  closeSkillSlashPicker();
+}
+
+function syncSkillSlashPickerFromInput() {
+  var input = document.getElementById('chatInput');
+  if (!input) return;
+  renderSkillSlashPicker(input.value);
+}
+
 function smartAction(type) {
   const ctx = currentContext;
   const hasInstance = !!ctx.instanceId;
@@ -2692,6 +3621,30 @@ document.addEventListener('mouseup', function(e) {
   floatDrag.on = false;
 });
 
+(function initSkillSlashPicker() {
+  var input = document.getElementById('chatInput');
+  var picker = document.getElementById('skillSlashPicker');
+  if (!input || !picker) return;
+  input.addEventListener('input', syncSkillSlashPickerFromInput);
+  input.addEventListener('focus', syncSkillSlashPickerFromInput);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === '/' && (input.selectionStart === 0 || input.value.length === 0)) {
+      setTimeout(syncSkillSlashPickerFromInput, 0);
+    }
+    if (e.key === 'Escape') closeSkillSlashPicker();
+  });
+  input.addEventListener('blur', function() {
+    setTimeout(closeSkillSlashPicker, 120);
+  });
+  picker.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+  });
+  document.addEventListener('click', function(e) {
+    if (e.target === input || picker.contains(e.target)) return;
+    if (!e.target.closest || !e.target.closest('.skill-slash-picker')) closeSkillSlashPicker();
+  });
+})();
+
 (function initResize() {
   const h = document.getElementById('resizeHandle');
   const p = document.getElementById('agentPanel');
@@ -2767,6 +3720,237 @@ function resolveContext(text, entities, intent) {
   }
 }
 
+function jsString(s) {
+  return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '');
+}
+
+function normalizeSkillText(text) {
+  return String(text || '').toLowerCase();
+}
+
+function skillTextMatches(skill, version, rawText) {
+  var text = normalizeSkillText(rawText);
+  var examples = ((version && version.intentExamples) || []).map(normalizeSkillText);
+  if (examples.some(function(ex) { return ex && text.indexOf(ex) >= 0; })) return true;
+  if (skill.id === 'skill-release-check') {
+    return /正式调度前校验|新发布.*任务.*校验|pre-?schedule|release check|before.*scheduled/i.test(rawText);
+  }
+  if (skill.id === 'skill-missing-alarm') {
+    return /(find|show|list|which|scan|查|找|列出|哪些).*(missing|without|no|未配置|没有).*(alarm|告警|报警)/i.test(rawText) ||
+      /(missing|without|未配置|没有).*(alarm|告警|报警).*(task|任务)/i.test(rawText);
+  }
+  if (skill.id === 'skill-long-running') {
+    return /(long[- ]running|running longer|运行超过|运行时长超过|超过.*小时).*(instance|实例|task|任务)?/i.test(rawText);
+  }
+  var haystack = normalizeSkillText([skill.name, skill.description, version && version.instructionBody].join(' '));
+  var compact = text.replace(/\s+/g, ' ');
+  return compact.length > 8 && haystack.indexOf(compact) >= 0;
+}
+
+function matchSkillSlashCandidate(text) {
+  var raw = String(text || '').trim();
+  if (!raw || raw.charAt(0) !== '/') return null;
+  var body = raw.slice(1).trim();
+  if (!body) return null;
+  var normalizedBody = normalizeSkillText(body);
+  var skills = SkillManager.list().filter(function(skill) {
+    return skill && skill.enabled !== false && SkillManager.getActiveVersion(skill);
+  });
+  var best = null;
+  skills.forEach(function(skill) {
+    var activeVersion = SkillManager.getActiveVersion(skill);
+    if (!activeVersion) return;
+    var skillName = normalizeSkillText(skill.name);
+    var skillId = normalizeSkillText(skill.id);
+    if (
+      normalizedBody === skillName ||
+      normalizedBody.indexOf(skillName) === 0 ||
+      skillName.indexOf(normalizedBody) === 0 ||
+      normalizedBody === skillId ||
+      normalizedBody.indexOf(skillId) === 0
+    ) {
+      if (!best || skillName.length > normalizeSkillText(best.skill.name).length) {
+        best = { skill: skill, version: activeVersion };
+      }
+    }
+  });
+  return best ? { skill: best.skill, version: best.version, available: true, matchedVersion: best.version } : null;
+}
+
+function matchSkillCandidate(text) {
+  var slashMatch = matchSkillSlashCandidate(text);
+  if (slashMatch) return slashMatch;
+  var skills = SkillManager.list();
+  for (var i = 0; i < skills.length; i++) {
+    var skill = skills[i];
+    var versions = (skill.versions || []).slice().sort(function(a, b) { return (b.versionNo || 1) - (a.versionNo || 1); });
+    for (var j = 0; j < versions.length; j++) {
+      var version = versions[j];
+      if (!skillTextMatches(skill, version, text)) continue;
+      var activeVersion = SkillManager.getActiveVersion(skill);
+      return {
+        skill: skill,
+        version: activeVersion || version,
+        available: !!activeVersion && skill.enabled !== false,
+        matchedVersion: version
+      };
+    }
+  }
+  return null;
+}
+
+function runSkillMock(skill, version, ctx, preview) {
+  if (!skill || !version) return { conclusion: 'No skill result available.', sections: [] };
+  if (skill.id === 'skill-release-check') {
+    return {
+      title: 'Pre-schedule release check summary',
+      conclusion: 'Found 7 newly released tasks in the current project. 5 are ready for official scheduling, 2 need attention before their first scheduled run.',
+      summary: [
+        { label: 'Scope', value: 'Current project · newly published tasks · last 24 hours' },
+        { label: 'Tools', value: 'Project Tasks, Publish Info, Trial Run, DQC Result, Alarm Setting' },
+        { label: 'Result', value: '5 ready · 2 attention required' }
+      ],
+      tableColumns: ['Task', 'Owner', 'Trial run', 'DQC', 'Alarm', 'Result'],
+      tableRows: [
+        ['update_table', 'bryann.yeapkk', 'Passed', 'Passed', 'Configured', 'Ready'],
+        ['ods_refund_event', 'finance.team', 'Failed', 'Not checked', 'Configured', 'Needs retry'],
+        ['ads_revenue_dashboard', 'finance.team', 'Passed', 'Warning', 'Missing', 'Needs alarm'],
+        ['dim_geo_region', 'data.team', 'Passed', 'Passed', 'Configured', 'Ready'],
+        ['ods_coupon_usage', 'marketing.team', 'Passed', 'Passed', 'Configured', 'Ready']
+      ],
+      sections: [
+        { title: 'Key findings', items: [
+          'ods_refund_event has a failed trial run caused by schema mismatch and should not be promoted silently.',
+          'ads_revenue_dashboard has a DQC warning and no task-level alarm policy configured.',
+          'The remaining newly published tasks have trial run records, DQC pass status, and alarm coverage.'
+        ] },
+        { title: 'Recommendation', items: [
+          'Retry the trial run for ods_refund_event after schema alignment.',
+          'Configure a task-level alarm for ads_revenue_dashboard before its first scheduled instance.',
+          'Use suggested actions only to open explicit confirmation flows.'
+        ] }
+      ],
+      actions: [
+        { label: 'Trigger Trial Run', message: 'Trigger now task ods_refund_event' },
+        { label: 'Set Alarm', message: 'Set alarm for task ads_revenue_dashboard' },
+        { label: 'View Task List', message: 'List all tasks' }
+      ]
+    };
+  }
+  if (skill.id === 'skill-missing-alarm') {
+    return {
+      title: 'Tasks without task-level alarm coverage',
+      conclusion: 'Found 3 active tasks in the current project without task-level alarm policies. No operation has been executed.',
+      summary: [
+        { label: 'Scope', value: 'Current project · active scheduled tasks' },
+        { label: 'Tools', value: 'Project Tasks, Task Info, Alarm Setting' },
+        { label: 'Result', value: '3 missing alarm coverage' }
+      ],
+      tableColumns: ['Task', 'Priority', 'Owner', 'Schedule', 'Alarm'],
+      tableRows: [
+        ['ads_revenue_dashboard', 'P5', 'finance.team', 'Daily 04:00', 'Missing'],
+        ['ads_user_retention', 'P4', 'analytics.team', 'Daily 06:30', 'Missing'],
+        ['ods_logistics_track', 'P4', 'logistics.team', 'Hourly', 'Missing']
+      ],
+      sections: [
+        { title: 'Recommendation', items: [
+          'Prioritize P5/P4 tasks before lower-priority tasks.',
+          'Open alarm configuration for each task and confirm receivers before enabling the policy.',
+          'If these tasks are intentionally silent, add an explicit owner note to avoid repeated findings.'
+        ] }
+      ],
+      actions: [
+        { label: 'Set Alarm', message: 'Set alarm for task ads_revenue_dashboard' },
+        { label: 'Show Dependencies', message: 'Show dependencies for task ads_revenue_dashboard' }
+      ]
+    };
+  }
+  if (skill.id === 'skill-long-running') {
+    return {
+      title: 'Long-running instance scan',
+      conclusion: 'Found 2 running instances exceeding the configured runtime threshold. The skill returns findings only and recommends manual follow-up.',
+      summary: [
+        { label: 'Scope', value: 'Current project · running instances · threshold 2 hours' },
+        { label: 'Tools', value: 'Instance History, Task Info' },
+        { label: 'Result', value: '2 long-running instances' }
+      ],
+      tableColumns: ['Instance', 'Task', 'Elapsed', 'Baseline', 'Finding'],
+      tableRows: [
+        ['di_scheduler.studio_7700001_20260403_DAY_1', 'etl_data_warehouse', '95 min', '40 min', 'Slower than baseline'],
+        ['di_scheduler.studio_8050119_20260403_DAY_1', 'sync_user_data', '77 min', '32 min', 'Possible skew']
+      ],
+      sections: [
+        { title: 'Recommendation', items: [
+          'Review resource usage and recent code changes before taking action.',
+          'Terminate or rerun only after opening the suggested operation and confirming it explicitly.'
+        ] }
+      ],
+      actions: [
+        { label: 'Diagnose Instance', message: 'Diagnose instance di_scheduler.studio_7700001_20260403_DAY_1' },
+        { label: 'Terminate Instance', message: 'Terminate instance di_scheduler.studio_7700001_20260403_DAY_1' }
+      ]
+    };
+  }
+  return {
+    title: skill.name,
+    conclusion: 'The skill ran in read-only mode and generated a summary from Scheduler tool results.',
+    summary: [
+      { label: 'Scope', value: version.scope || 'project' },
+      { label: 'Output', value: version.outputType || 'summary' },
+      { label: 'Tools', value: (version.allowedTools || []).join(', ') || 'No tools selected' }
+    ],
+    sections: [{ title: 'Summary', items: ['No operation was executed. Suggested operations must be manually confirmed.'] }],
+    actions: []
+  };
+}
+
+function genSkillRunResult(skill, version, result) {
+  result = result || runSkillMock(skill, version, currentContext, false);
+  var summaryHtml = (result.summary || []).map(function(item) {
+    return '<div class="skill-summary"><span>' + escapeHtml(item.label) + '</span><strong>' + escapeHtml(item.value) + '</strong></div>';
+  }).join('');
+  var tableHtml = '';
+  if (result.tableColumns && result.tableRows) {
+    tableHtml = '<div class="skill-table-wrap"><table class="skill-table"><thead><tr>' +
+      result.tableColumns.map(function(col) { return '<th>' + escapeHtml(col) + '</th>'; }).join('') +
+      '</tr></thead><tbody>' +
+      result.tableRows.map(function(row) {
+        return '<tr>' + row.map(function(cell) { return '<td>' + escapeHtml(cell) + '</td>'; }).join('') + '</tr>';
+      }).join('') +
+      '</tbody></table></div>';
+  }
+  var sectionHtml = (result.sections || []).map(function(section) {
+    return '<div class="skill-section"><div class="skill-section-title">' + escapeHtml(section.title) + '</div><ul>' +
+      (section.items || []).map(function(item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') +
+      '</ul></div>';
+  }).join('');
+  var actionHtml = (result.actions || []).length ? '<div class="skill-action-bar">' +
+    result.actions.map(function(action) {
+      return '<button type="button" class="skill-suggested-action" onclick="simulateSendWithText(\'' + jsString(action.message) + '\')">' + escapeHtml(action.label) + '</button>';
+    }).join('') +
+    '</div>' : '';
+  return '<div class="response-wrap">' +
+    '<div class="skill-result">' +
+      '<div class="skill-result-head"><div><div class="skill-result-title">' + escapeHtml(result.title || skill.name) + '</div>' +
+      '<div class="skill-result-sub">' + escapeHtml(skill.name) + ' · ' + skillVersionLabel(version) + ' · read-only skill</div></div><span class="skill-chip">No auto operation</span></div>' +
+      '<div class="skill-section"><div class="skill-section-title">Conclusion</div><p>' + escapeHtml(result.conclusion || '') + '</p></div>' +
+      '<div class="skill-grid-2">' + summaryHtml + '</div>' +
+      tableHtml + sectionHtml + actionHtml +
+    '</div>' +
+  '</div>';
+}
+
+function genSkillUnavailable(skill, version, matchedVersion) {
+  var status = skillStatusLabel(skill, matchedVersion || version);
+  return '<div class="response-wrap"><div class="skill-result">' +
+    '<div class="skill-result-head"><div><div class="skill-result-title">Skill is not available yet</div>' +
+    '<div class="skill-result-sub">' + escapeHtml(skill ? skill.name : 'Matched skill') + ' · ' + status.replace('_', ' ') + '</div></div><span class="skill-chip">Read-only</span></div>' +
+    '<div class="skill-section"><div class="skill-section-title">Conclusion</div><p>This request matches a skill, but the skill cannot be used in Agent chat until an active version is enabled.</p></div>' +
+    '<div class="skill-section"><div class="skill-section-title">Suggestion</div><ul><li>Open Skills to review its status.</li><li>Submit the latest version, wait for review, or enable the active version before using it.</li></ul></div>' +
+    '<div class="skill-action-bar"><button type="button" class="skill-suggested-action" onclick="openSkillModal()">Open Skills</button></div>' +
+  '</div></div>';
+}
+
 function classifyIntent(text) {
   function getDependencyDirection(rawText) {
     var hasUpstream = /上游|upstream/i.test(rawText);
@@ -2775,7 +3959,23 @@ function classifyIntent(text) {
     if (hasDownstream && !hasUpstream) return 'downstream';
     return 'both';
   }
+  if (/^open skills?$|^manage skills?$|打开.*skill|打开.*技能|管理.*skill|管理.*技能/i.test(text.trim())) return { type: 'skill_manage' };
+  var skillMatch = matchSkillCandidate(text);
+  if (skillMatch) {
+    return {
+      type: skillMatch.available ? 'skill_run' : 'skill_unavailable',
+      skillId: skillMatch.skill.id,
+      versionId: skillMatch.version && skillMatch.version.id,
+      matchedVersionId: skillMatch.matchedVersion && skillMatch.matchedVersion.id
+    };
+  }
   if (/你能做什么|你的功能|你能帮我|你可以做|你会什么|介绍.*功能|功能.*介绍|你有什么能力|能力.*介绍|支持.*运维操作|运维操作.*支持|使用帮助|怎么用|如何使用|支持.*能力|能力.*支持|支持.*什么|what can you do|your capabilities|what do you support|help|usage guide|capability.*(intro|overview|list)|what.*capabilities|capabilities.*what|what features|introduce yourself|what are you/i.test(text)) return { type: 'capability_intro' };
+  if (/重跑|rerun/i.test(text) && /all of them|all those|rerun all|rerun these|these instances|those instances|selected ones|上面这些|这些实例|这些|全部|所有|批量重跑|batch rerun|结果里的|列表里的|failed instances|successful instances|失败实例|成功实例/i.test(text)) {
+    return { type: 'op_rerun', level: 'instance', batchMode: 'last_result' };
+  }
+  if (/冻结|freeze/i.test(text) && textReferencesBatchTaskResult(text) && !/解冻|unfreeze/i.test(text)) {
+    return { type: 'op_freeze', level: 'task', batchMode: 'last_result' };
+  }
   if (/哪些.*失败|失败.*哪些|失败.*任务|失败.*实例|运行失败|which.*failed|failed.*which|failed.*task|failed.*instance/i.test(text) && !/为什么|诊断|分析|why|diagnos|analyz/i.test(text)) return { type: 'search_instances', filter: 'Failed' };
   if (/哪些.*异常|异常.*实例|异常.*任务|有问题.*实例|问题.*任务|which.*abnormal|abnormal.*instance|problem.*instance/i.test(text)) return { type: 'search_instances', filter: 'abnormal' };
   if (/哪些.*等待|等待.*实例|等待.*任务|which.*waiting|waiting.*instance/i.test(text)) return { type: 'search_instances', filter: 'Waiting' };
@@ -2803,6 +4003,10 @@ function classifyIntent(text) {
     return { type: 'info_dependency', direction: depDirection };
   }
   if (/代码|做什么|逻辑|sql|脚本|code|what does|logic/i.test(text)) return { type: 'info_code' };
+  var hasAlarmTerm = /告警|报警|alarm|notification|notify/i.test(text);
+  var isAlarmDiagnosisQuestion = /为什么|为何|没有|没触发|未触发|没收到|未收到|收不到|不报警|why|didn'?t|did not|not trigger|not receive|missing|no alarm|failed to notify|without notification/i.test(text);
+  var isAlarmOperationQuestion = /设置|配置|创建|新增|绑定|开启|关闭|set|create|add|bind|enable|disable|edit|configure/i.test(text);
+  if (hasAlarmTerm && isAlarmDiagnosisQuestion && !isAlarmOperationQuestion) return { type: 'diagnosis_rule_alarm', level: 'task' };
   if (/重跑|rerun/i.test(text)) return { type: 'op_rerun', level: 'instance' };
   if (/补数据|backfill/i.test(text)) {
     var bfIntent = { type: 'op_backfill', level: 'task' };
@@ -2857,7 +4061,7 @@ function classifyIntent(text) {
   if (/重试.*DQC|DQC.*重试|retry.*dqc|dqc.*retry/i.test(text)) return { type: 'op_dqc', level: 'instance' };
   if (/标记.*成功|置.*成功|mark.*success|set.*success/i.test(text)) return { type: 'op_mark_success', level: 'instance' };
   if (/立即触发|trigger.*now|immediate.*run|立即执行|马上跑/i.test(text)) return { type: 'op_trigger_now', level: 'task' };
-  if (/告警|alarm/i.test(text)) return { type: 'op_alarm', level: 'task' };
+  if (/告警|报警|alarm/i.test(text)) return { type: 'op_alarm', level: 'task' };
   if (/删除|修改代码|变更权限|修改工作流|修改.*负责人|变更.*负责人|修改.*owner|更换.*负责人|转让|移交|修改.*调度|修改.*配置|新建.*任务|创建.*任务|上线|下线|delete|modify code|change permission|modify workflow|change owner|transfer|modify schedule|modify config|create task|publish|unpublish/i.test(text)) return { type: 'unsupported' };
   if (/血缘|lineage/i.test(text)) return { type: 'info_lineage' };
   if (/日志|syslog|system log|log summary|log\b/i.test(text)) return { type: 'info_syslog' };
@@ -2974,6 +4178,49 @@ function genDiagnosisResource(ctx) {
   return '<div class="response-wrap">' +
 '<div class="msg-bubble" style="border:none;background:transparent;padding:8px 14px 6px;">Instance <strong>' + inst + '</strong> (' + name + ') resource usage analysis:</div>' +
 '<div class="resp-section">' + resourceBars() + '</div></div>';
+}
+
+function genRuleAlarmDiagnosis(ctx) {
+  const name = ctx.taskName || currentContext.taskName || 'update_table';
+  const task = TASKS[name] || TASKS.update_table || {};
+  const taskCode = ctx.taskCode || task.code || 'di_scheduler.studio_6801187';
+  const jsName = String(name).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const displayName = escapeHtml(name);
+  const displayCode = escapeHtml(taskCode);
+  const settings = TASK_ALARM_SETTINGS[name] || {};
+  const boundPolicyCount = Object.keys(settings).length;
+  const failurePolicy = settings['Task Failure'] || 'Not configured';
+
+  return '<div class="response-wrap">' +
+  '<div class="rule-dx">' +
+    '<div class="rule-dx-top">' +
+      '<div class="rule-dx-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F6FE5" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></div>' +
+      '<div class="rule-dx-head"><div class="rule-dx-title">Backfill alarm check</div><div class="rule-dx-sub"><span><em>Object</em><strong>' + displayName + '</strong></span><span><em>Scenario</em><strong>Backfill run</strong></span><span><em>Key setting</em><strong>Individual alarms off</strong></span></div></div>' +
+    '</div>' +
+    '<div class="rule-dx-section conclusion">' +
+      '<div class="rule-dx-section-title">Conclusion</div>' +
+      '<div class="rule-dx-list">' +
+        '<div class="rule-dx-row"><span class="rule-dx-dot"></span><div>No separate task-level alarm is expected for this run. The run belongs to a backfill event, and that event has <strong>Individual Task Alarms = Off</strong>.</div></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="rule-dx-section">' +
+      '<div class="rule-dx-section-title">Reason</div>' +
+      '<div class="rule-dx-list compact-list">' +
+        '<div class="rule-dx-row"><span class="rule-dx-num">1</span><div>Backfill/rerun instances carry a <code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">createEventNo</code>, so Scheduler checks the event notification setting first.</div></div>' +
+        '<div class="rule-dx-row"><span class="rule-dx-num">2</span><div>When <strong>enableIndividualTaskAlarm = 0</strong>, the alarm listener returns early and skips task-level alarm sending.</div></div>' +
+        '<div class="rule-dx-row"><span class="rule-dx-num">3</span><div>The task has <strong>' + boundPolicyCount + '</strong> bound alarm policies, including <strong>' + escapeHtml(failurePolicy) + '</strong>; the missing alarm is caused by the event-level switch, not missing task configuration.</div></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="rule-dx-section compact">' +
+      '<div class="rule-dx-section-title">Suggestion</div>' +
+      '<div class="rule-dx-actions-text">For future backfills or reruns, enable <strong>Individual Task Alarms</strong> when each task should send its own alert. For large batch events, keep it off and rely on the event summary or workflow-level notification to avoid alert noise.</div>' +
+    '</div>' +
+  '</div>' +
+'<div class="resp-section" style="border-bottom:none;"><div class="link-btns">' +
+  '<button type="button" class="link-btn" onclick="linkTo(\'view-taskview-alarm\',null,{taskName:\'' + jsName + '\',taskCode:\'' + displayCode + '\'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>View Alarm Setting</button>' +
+  '<button type="button" class="link-btn" onclick="linkTo(\'view-alarm-policy\',null,{taskName:\'' + jsName + '\'})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 4h18M8 12h8M10 20h4"/></svg>View Alarm Policy</button>' +
+  '<button type="button" class="link-btn" onclick="navToTask(\'' + jsName + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>Open Backfill Matrix</button>' +
+'</div></div></div>';
 }
 
 function buildDepItems(items, totalCount, direction) {
@@ -3239,6 +4486,7 @@ function genSearchInstances(filter) {
   var filterLabel = filter === 'abnormal' ? 'abnormal' : filter === 'Failed' ? 'failed' : filter === 'Waiting' ? 'waiting' : filter === 'Running' ? 'running' : 'successful';
   var badgeClass = filter === 'Failed' ? 'failed' : filter === 'Running' ? 'running' : filter === 'Waiting' ? 'waiting' : 'success';
   if (filter === 'abnormal') badgeClass = '';
+  storeLastInstanceSearchResult(filter, results);
   if (results.length === 0) {
     return '<div class="response-wrap"><div class="msg-bubble" style="border:none;padding:10px 14px;">No results found: no ' + filterLabel + ' instances today.</div></div>';
   }
@@ -3253,8 +4501,14 @@ function genSearchInstances(filter) {
       (r.inst.note ? '<span style="color:#8C8C8C;font-size:11px;flex-shrink:0;white-space:nowrap;">' + r.inst.note + '</span>' : '') +
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#BFBFBF" stroke-width="2" style="flex-shrink:0;"><path d="M9 18l6-6-6-6"/></svg></div>';
   }).join('');
+  var rerunEligibleCount = results.filter(function(r) { return r.inst.status === 'Successful' || r.inst.status === 'Failed'; }).length;
+  var shortcutBar = rerunEligibleCount > 0
+    ? '<div class="skill-action-bar" style="padding:0 16px 8px;"><button type="button" class="skill-suggested-action" onclick="simulateSendWithText(\'Rerun all of them\')">Batch Rerun Eligible (' + rerunEligibleCount + ')</button>' +
+      (results.some(function(r) { return r.inst.status === 'Failed'; }) ? '<button type="button" class="skill-suggested-action" onclick="simulateSendWithText(\'Rerun failed instances from the result\')">Rerun Failed Only</button>' : '') +
+      '</div>' : '';
   return '<div class="response-wrap"><div class="msg-bubble" style="border:none;padding:14px 16px;">Found <strong>' + results.length + '</strong> matching ' + filterLabel + ' instances today:</div>' +
     '<div style="padding:0 16px 12px;">' + rows + '</div>' +
+    shortcutBar +
     '<div style="padding:4px 16px 12px;font-size:11px;color:#BFBFBF;">Click an instance to run diagnosis</div></div>';
 }
 
@@ -3270,6 +4524,7 @@ function genSearchTasks(filter) {
     else if (filter === 'all') results.push({ name: name, task: t });
   });
   var filterLabel = specificPri ? 'Priority P' + specificPri[1] : filter === 'high_priority' ? 'high-priority' : filter === 'low_priority' ? 'low-priority' : 'matching';
+  storeLastTaskSearchResult(filter, results);
   if (results.length === 0) {
     return '<div class="response-wrap"><div class="msg-bubble" style="border:none;padding:10px 14px;">No results found' + (filter === 'all' ? '.' : ' for ' + filterLabel + ' tasks.') + '</div></div>';
   }
@@ -3294,8 +4549,12 @@ function genSearchTasks(filter) {
       '<span style="display:flex;gap:3px;flex-shrink:0;">' + statusSummary + '</span>' +
       '</div>';
   }).join('');
+  var freezeShortcutBar = results.length > 0
+    ? '<div class="skill-action-bar" style="padding:0 16px 8px;"><button type="button" class="skill-suggested-action" onclick="simulateSendWithText(\'Freeze all of them\')">Batch Freeze Result (' + results.length + ')</button>' +
+      (results.some(function(r) { return getPriorityNum(r.task.priority) >= 4; }) ? '<button type="button" class="skill-suggested-action" onclick="simulateSendWithText(\'Freeze high-priority tasks from result\')">Freeze High Priority Only</button>' : '') +
+      '</div>' : '';
   return '<div class="response-wrap"><div class="msg-bubble" style="border:none;padding:14px 16px;">' + (filter === 'all' ? 'Found <strong>' + results.length + '</strong> tasks:' : 'Found <strong>' + results.length + '</strong> matching ' + filterLabel + ' tasks:') + '</div>' +
-    '<div style="padding:0 16px 12px;">' + rows + '</div></div>';
+    '<div style="padding:0 16px 12px;">' + rows + '</div>' + freezeShortcutBar + '</div>';
 }
 
 function genInfoCode(ctx, embedSummary) {
@@ -3335,6 +4594,250 @@ function buildOpSection(title, summary, content, options) {
     '</div>';
 }
 
+function storeLastInstanceSearchResult(filter, results) {
+  lastInstanceSearchResult = {
+    id: 'result-set-' + Date.now(),
+    filter: filter,
+    items: results.map(function(item) {
+      return {
+        id: item.id,
+        task: item.inst.task,
+        status: item.inst.status,
+        note: item.inst.note || ''
+      };
+    })
+  };
+}
+
+function storeLastTaskSearchResult(filter, results) {
+  lastTaskSearchResult = {
+    id: 'task-result-' + Date.now(),
+    filter: filter,
+    items: results.map(function(item) {
+      return {
+        taskName: item.name,
+        taskCode: item.task.code,
+        priority: item.task.priority,
+        owner: item.task.owner
+      };
+    })
+  };
+}
+
+function textReferencesBatchTaskResult(text) {
+  return /freeze all|freeze these|freeze them|freeze the tasks|all of them|all those|these tasks|those tasks|selected tasks|this batch|that batch|上面这些任务|这些任务|这批任务|上述任务|上面的任务|这些|全部|所有|都冻结|全部冻结|批量冻结|批量 freeze|batch freeze|结果里的|列表里的|high-priority tasks from result|high priority tasks from result|高优先级任务/i.test(text);
+}
+
+function extractAllTaskNames(text) {
+  var normalized = String(text || '').replace(/\./g, '_');
+  var taskNames = Object.keys(TASKS);
+  var found = [];
+  for (var i = 0; i < taskNames.length; i++) {
+    if (normalized.indexOf(taskNames[i]) >= 0 || String(text || '').indexOf(taskNames[i]) >= 0) {
+      found.push(taskNames[i]);
+    }
+  }
+  return found.filter(function(name, index) { return found.indexOf(name) === index; });
+}
+
+function buildBatchRerunSelection(rawText) {
+  if (!lastInstanceSearchResult || !Array.isArray(lastInstanceSearchResult.items) || !lastInstanceSearchResult.items.length) return null;
+  var text = String(rawText || '');
+  if (/di_scheduler\.[a-z0-9_]+/i.test(text)) return null;
+  var referencesLastSet = /all of them|all those|rerun all|rerun these|these instances|those instances|selected ones|上面这些|这些实例|这些|全部|所有|批量重跑|batch rerun|结果里的|列表里的|failed instances|successful instances|失败实例|成功实例/i.test(text);
+  if (!referencesLastSet) return null;
+  var requestedStatuses = null;
+  if (/successful|success|成功/i.test(text)) requestedStatuses = ['Successful'];
+  else if (/failed|失败/i.test(text)) requestedStatuses = ['Failed'];
+  var selected = lastInstanceSearchResult.items.filter(function(item) {
+    return !requestedStatuses || requestedStatuses.indexOf(item.status) >= 0;
+  });
+  if (!selected.length) return null;
+  return {
+    sourceId: lastInstanceSearchResult.id,
+    sourceFilter: lastInstanceSearchResult.filter,
+    items: selected
+  };
+}
+
+function buildBatchFreezeSelection(rawText) {
+  var text = String(rawText || '');
+  if (/di_scheduler\.[a-z0-9_]+_.*_day_\d+/i.test(text)) return null;
+  var explicitTaskNames = extractAllTaskNames(text);
+  if (explicitTaskNames.length > 1 && /冻结|freeze/i.test(text) && !/解冻|unfreeze/i.test(text)) {
+    return {
+      sourceId: 'explicit-task-list-' + Date.now(),
+      sourceFilter: 'explicit task list',
+      items: explicitTaskNames.map(function(taskName) {
+        var task = TASKS[taskName] || {};
+        return {
+          taskName: taskName,
+          taskCode: task.code || '',
+          priority: task.priority || '',
+          owner: task.owner || ''
+        };
+      })
+    };
+  }
+  if (!lastTaskSearchResult || !Array.isArray(lastTaskSearchResult.items) || !lastTaskSearchResult.items.length) return null;
+  var referencesLastSet = textReferencesBatchTaskResult(text) || /把.*任务.*冻结|冻结.*任务.*(都|全部|一下|掉)|先.*冻结.*任务/i.test(text);
+  if (!referencesLastSet) return null;
+  var selected = lastTaskSearchResult.items.slice();
+  if (/high-priority tasks from result|high priority tasks from result|高优先级任务/i.test(text)) {
+    selected = selected.filter(function(item) { return getPriorityNum(item.priority) >= 4; });
+  }
+  if (!selected.length) return null;
+  return {
+    sourceId: lastTaskSearchResult.id,
+    sourceFilter: lastTaskSearchResult.filter,
+    items: selected
+  };
+}
+
+function getTaskActiveFreezeInstances(taskName) {
+  return Object.entries(INSTANCES).filter(function(e) {
+    return e[1].task === taskName && (e[1].status === 'Running' || e[1].status === 'Waiting');
+  }).map(function(entry) {
+    return { id: entry[0], status: entry[1].status };
+  });
+}
+
+function getTaskSlaManagers(taskName) {
+  return (TASK_SLA_MANAGERS[taskName] || []).slice();
+}
+
+function summarizeBatchRerunStatus(items) {
+  var summary = {
+    selected: items.length,
+    eligible: [],
+    excluded: [],
+    eligibleCounts: { Successful: 0, Failed: 0 },
+    excludedCounts: {}
+  };
+  items.forEach(function(item) {
+    if (item.status === 'Successful' || item.status === 'Failed') {
+      summary.eligible.push(item);
+      summary.eligibleCounts[item.status] = (summary.eligibleCounts[item.status] || 0) + 1;
+    } else {
+      summary.excluded.push(item);
+      summary.excludedCounts[item.status] = (summary.excludedCounts[item.status] || 0) + 1;
+    }
+  });
+  return summary;
+}
+
+function batchStatusCountHtml(counts) {
+  return Object.keys(counts).filter(function(status) { return counts[status] > 0; }).map(function(status) {
+    return '<span class="batch-rerun-count"><strong>' + counts[status] + '</strong> ' + status + '</span>';
+  }).join('');
+}
+
+function batchRerunDetailRows(items, includeReason) {
+  return items.map(function(item) {
+    return '<div class="batch-rerun-detail-row">' +
+      '<div class="batch-rerun-detail-main">' +
+        '<div class="batch-rerun-detail-task">' + item.task + '</div>' +
+        '<button type="button" class="batch-rerun-instance-link" onclick="navToInstance(\'' + item.id + '\')">' + item.id + '</button>' +
+      '</div>' +
+      '<div class="batch-rerun-detail-side">' +
+        '<span class="status-badge ' + statusBadgeClass(item.status) + '">' + item.status + '</span>' +
+        (includeReason ? '<span class="batch-rerun-reason">Not supported for rerun</span>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function setRerunTitle(uid, showStep1) {
+  var title = document.getElementById(uid + '-rerun-title');
+  if (!title) return;
+  var base = title.getAttribute('data-base-title') || 'Rerun Instance';
+  title.textContent = base + ' (' + (showStep1 ? '1' : '2') + '/2)';
+}
+
+function toggleBatchRerunDetails(uid, section) {
+  if (section === 'all') {
+    ['eligible', 'excluded'].forEach(function(key) {
+      var el = document.getElementById(uid + '-details-' + key);
+      if (el) el.classList.toggle('open');
+    });
+    scrollActiveConv();
+    return;
+  }
+  var target = document.getElementById(uid + '-details-' + section);
+  if (!target) return;
+  target.classList.toggle('open');
+  scrollActiveConv();
+}
+
+function renderPinnedInlineBatchRerunSuccess(uid, eventName, summary, leadTask) {
+  return '<div class="response-wrap" id="' + uid + '-kill-inline"><div class="msg-bubble" style="border:none;padding:0 0 8px;">Batch rerun submitted successfully.</div>' +
+    '<div class="r-card"><div class="ac-body"><div class="ac-params">' +
+    '<div class="ac-row"><span class="ac-key">Event Name</span><span class="ac-val">' + eventName + '</span></div>' +
+    '<div class="ac-row"><span class="ac-key">Submitted</span><span class="ac-val">' + summary.eligible.length + ' instance(s)</span></div>' +
+    '<div class="ac-row"><span class="ac-key">Excluded</span><span class="ac-val">' + summary.excluded.length + ' instance(s)</span></div>' +
+    '<div class="ac-done confirmed" style="margin-top:2px;"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">Submitted successfully</div><div class="acd-sub">Eligible instances were added to scheduler queue</div></div><a class="acd-link" onclick="navToRerunEvent(\'' + leadTask + '\',\'' + eventName + '\')">View Execution Details →</a></div>' +
+    '</div></div></div></div>';
+}
+
+function renderPinnedInlineBatchFreezeSuccess(uid, state) {
+  var summary = summarizeBatchFreezeState(state);
+  var detailText = state.killChoice === 'yes' && summary.activeInstanceCount > 0
+    ? 'Freeze submitted for ' + summary.includedCount + ' task(s); ' + summary.activeInstanceCount + ' active instance(s) will be terminated.'
+    : 'Freeze submitted for ' + summary.includedCount + ' task(s).';
+  return '<div class="response-wrap" id="' + uid + '-kill-inline"><div class="msg-bubble" style="border:none;padding:0 0 8px;">Batch freeze submitted successfully.</div>' +
+    '<div class="r-card"><div class="ac-body"><div class="ac-params">' +
+    '<div class="ac-row"><span class="ac-key">Included Tasks</span><span class="ac-val">' + summary.includedCount + '</span></div>' +
+    '<div class="ac-row"><span class="ac-key">Kill Active Instances</span><span class="ac-val">' + (state.killChoice === 'yes' ? 'Yes' : 'No') + '</span></div>' +
+    '<div class="ac-done confirmed" style="margin-top:2px;"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">' + detailText + '</div></div></div>' +
+    '</div></div></div></div>';
+}
+
+function summarizeBatchFreezeState(state) {
+  var taskNames = Object.keys(state.included || {});
+  var summary = {
+    includedCount: taskNames.length,
+    activeInstanceCount: 0,
+    downstreamCount: 0,
+    slaTaskCount: 0,
+    tasksWithActive: [],
+    tasksWithDownstream: [],
+    tasksWithSla: []
+  };
+  taskNames.forEach(function(taskName) {
+    var active = getTaskActiveFreezeInstances(taskName);
+    var dep = DEPS[taskName] || { up: [], down: [] };
+    var sla = getTaskSlaManagers(taskName);
+    if (active.length) {
+      summary.activeInstanceCount += active.length;
+      summary.tasksWithActive.push({ taskName: taskName, instances: active });
+    }
+    if (dep.down && dep.down.length) {
+      summary.downstreamCount += dep.down.length;
+      summary.tasksWithDownstream.push({ taskName: taskName, downstream: dep.down.slice() });
+    }
+    if (sla.length) {
+      summary.slaTaskCount += 1;
+      summary.tasksWithSla.push({ taskName: taskName, slaManagers: sla });
+    }
+  });
+  return summary;
+}
+
+function toggleBatchFreezeSection(uid, section) {
+  var state = batchFreezeState[uid];
+  if (!state) return;
+  state.openSections = state.openSections || {};
+  state.openSections[section] = !state.openSections[section];
+  rerenderBatchFreezeCard(uid);
+}
+
+function setBatchFreezeKillChoice(uid, value) {
+  var state = batchFreezeState[uid];
+  if (!state) return;
+  state.killChoice = value === 'yes' ? 'yes' : 'no';
+  rerenderBatchFreezeCard(uid);
+}
+
 function setRerunStep(uid, step) {
   var step1 = document.getElementById(uid + '-step-1');
   var step2 = document.getElementById(uid + '-step-2');
@@ -3349,6 +4852,7 @@ function setRerunStep(uid, step) {
   if (btnStep2) btnStep2.style.display = showStep1 ? 'none' : '';
   if (step1Tag) step1Tag.classList.toggle('active', showStep1);
   if (step2Tag) step2Tag.classList.toggle('active', !showStep1);
+  setRerunTitle(uid, showStep1);
   scrollActiveConv();
 }
 
@@ -3388,101 +4892,248 @@ function genKillOperationConfirm(ctx, taskCode, warnSvg) {
   };
 }
 
+function genBatchRerunConfirm(selection) {
+  var uid = 'dyn-' + Date.now();
+  var summary = summarizeBatchRerunStatus(selection.items || []);
+  var leadTask = summary.eligible.length ? summary.eligible[0].task : ((selection.items[0] || {}).task || 'update_table');
+  var eventDateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  var eventName = eventDateStr + '_BATCH_RERUN_' + String(selection.sourceFilter || 'instances').toUpperCase();
+  var viewCount = summary.selected;
+  var rerunWizardIcon = '<span class="rerun-wizard-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 002.13 3.36 9 9 0 0012.72 0A9 9 0 0021 12"/><path d="M23 20v-6h-6"/><path d="M20.49 9a9 9 0 00-2.13-3.36 9 9 0 00-12.72 0A9 9 0 003 12"/></svg></span>';
+  var nextSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg>';
+  var eligibleCounts = batchStatusCountHtml(summary.eligibleCounts) || '<span class="batch-rerun-count empty">0 rerunnable instances</span>';
+  var excludedCounts = batchStatusCountHtml(summary.excludedCounts) || '<span class="batch-rerun-count empty">0 excluded</span>';
+  var excludedCardHtml = summary.excluded.length
+    ? '<div class="batch-rerun-scope-card">' +
+        '<div class="batch-rerun-scope-head"><span>Excluded</span><button type="button" class="batch-rerun-link" onclick="toggleBatchRerunDetails(\'' + uid + '\',\'excluded\')">View details</button></div>' +
+        '<div class="batch-rerun-counts">' + excludedCounts + '</div>' +
+        '<div class="batch-rerun-detail-list" id="' + uid + '-details-excluded">' + batchRerunDetailRows(summary.excluded, true) + '</div>' +
+      '</div>'
+    : '';
+  var step1Panel =
+    '<div class="op-step-panel rerun-wizard-panel" id="' + uid + '-step-1">' +
+      '<div class="batch-rerun-overview">' +
+        '<div class="batch-rerun-source">Source: ' + viewCount + ' instance(s) from ' + escapeHtml(selection.sourceFilter || 'search result') + ' result set</div>' +
+        '<div class="batch-rerun-stats">' +
+          '<div class="batch-rerun-stat"><span>Selected</span><strong>' + summary.selected + '</strong></div>' +
+          '<div class="batch-rerun-stat"><span>Eligible</span><strong>' + summary.eligible.length + '</strong></div>' +
+          '<div class="batch-rerun-stat"><span>Excluded</span><strong>' + summary.excluded.length + '</strong></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="batch-rerun-scope-grid">' +
+        '<div class="batch-rerun-scope-card">' +
+          '<div class="batch-rerun-scope-head"><span>Eligible</span><button type="button" class="batch-rerun-link" onclick="toggleBatchRerunDetails(\'' + uid + '\',\'eligible\')">View details</button></div>' +
+          '<div class="batch-rerun-counts">' + eligibleCounts + '</div>' +
+          '<div class="batch-rerun-detail-list" id="' + uid + '-details-eligible">' + batchRerunDetailRows(summary.eligible, false) + '</div>' +
+        '</div>' +
+        excludedCardHtml +
+      '</div>' +
+      '<div class="rerun-wizard-field"><label class="rerun-wizard-label">Event Name:</label><input class="ac-input rerun-wizard-input" id="' + uid + '-event-name" type="text" value="' + eventName + '"/></div>' +
+      '<div class="rerun-wizard-field"><label class="rerun-wizard-label">Priority:</label><select class="ac-select rerun-wizard-select"><option value="lower">Lower priority than scheduled tasks</option><option value="same" selected>same priority as scheduled tasks (Recommended)</option><option value="higher">Higher priority than scheduled tasks</option></select></div>' +
+      '<div class="rerun-wizard-field last"><div class="rerun-wizard-label">Execution Scope:</div><div class="rerun-wizard-radio-stack">' +
+        '<label class="rerun-wizard-radio"><input type="radio" name="' + uid + '-downstream" value="no" checked onchange="toggleCascadeRerun(\'' + uid + '\',\'batch_result_set\')"/> <span>Current instances only</span></label>' +
+        '<label class="rerun-wizard-radio"><input type="radio" name="' + uid + '-downstream" value="yes" onchange="toggleCascadeRerun(\'' + uid + '\',\'batch_result_set\')"/> <span>Include Downstream (Cascade rerun)</span></label>' +
+      '</div></div>' +
+    '</div>';
+  var step2Panel =
+    '<div class="op-step-panel rerun-wizard-panel" id="' + uid + '-step-2" style="display:none;">' +
+      '<div class="rerun-wizard-field" id="' + uid + '-skipdep-row"><div class="rerun-wizard-label">Skip Dependency:</div><div class="rerun-wizard-radio-row">' +
+        '<label class="rerun-wizard-radio"><input type="radio" name="' + uid + '-skipdep" value="all"/> <span>All</span></label>' +
+        '<label class="rerun-wizard-radio"><input type="radio" name="' + uid + '-skipdep" value="none" checked/> <span>None</span></label>' +
+      '</div></div>' +
+      '<div class="rerun-wizard-field"><div class="rerun-wizard-label">Skip DQC:</div><div class="rerun-wizard-radio-row">' +
+        '<label class="rerun-wizard-radio"><input type="radio" name="' + uid + '-dqc" value="yes"/> <span>Yes</span></label>' +
+        '<label class="rerun-wizard-radio"><input type="radio" name="' + uid + '-dqc" value="no" checked/> <span>No</span></label>' +
+      '</div></div>' +
+      '<div class="rerun-wizard-field"><div class="rerun-wizard-label">Individual Task Alarms:</div><label class="toggle-switch rerun-wizard-toggle"><input type="checkbox" name="' + uid + '-alarm-toggle" checked/><span class="toggle-slider"></span></label></div>' +
+      '<div class="batch-rerun-submit-bar">' +
+        '<div class="batch-rerun-submit-title">Submit ' + summary.eligible.length + ' rerun instance(s) · Exclude ' + summary.excluded.length + ' unsupported</div>' +
+        '<div class="batch-rerun-submit-meta">Included: ' + (summary.eligibleCounts.Successful || 0) + ' Successful, ' + (summary.eligibleCounts.Failed || 0) + ' Failed</div>' +
+        (summary.excluded.length ? '<div class="batch-rerun-submit-meta">Excluded: ' + Object.keys(summary.excludedCounts).map(function(status) { return summary.excludedCounts[status] + ' ' + status; }).join(', ') + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  batchRerunState[uid] = {
+    selection: selection,
+    summary: summary,
+    leadTask: leadTask
+  };
+  var dockHtml = '<div class="r-card rerun-wizard-card" id="' + uid + '-card" data-op="rerun-batch"><div class="rerun-wizard-head"><div class="rerun-wizard-head-left">' + rerunWizardIcon + '<span class="rerun-wizard-title" id="' + uid + '-rerun-title" data-base-title="Batch Rerun Instances">Batch Rerun Instances (1/2)</span></div></div><div class="ac-body rerun-wizard-body"><div class="ac-params rerun-wizard-params" id="' + uid + '-params">' +
+    step1Panel + step2Panel +
+    '</div><div class="ac-warning" id="' + uid + '-warning">New instance(s) will be generated for eligible targets only. Running and waiting instances stay excluded.</div>' +
+    '<div class="ac-btns rerun-wizard-foot" id="' + uid + '-btns"><div class="op-step-actions" id="' + uid + '-step1-btns"><button type="button" class="ac-btn cancel rerun-wizard-cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary rerun-wizard-primary" onclick="setRerunStep(\'' + uid + '\',2)">Next ' + nextSvg + '</button></div>' +
+    '<div class="op-step-actions" id="' + uid + '-step2-btns" style="display:none;"><button type="button" class="rerun-wizard-prev" onclick="setRerunStep(\'' + uid + '\',1)"><span>&lt;</span> Previous</button><button type="button" class="ac-btn cancel rerun-wizard-cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary rerun-wizard-primary" onclick="confirmBatchRerun(\'' + uid + '\')">Confirm ' + summary.eligible.length + '</button></div></div></div></div>';
+  return {
+    uid: uid,
+    opType: 'op_rerun',
+    opLabel: 'Batch Rerun',
+    level: 'instance',
+    taskName: leadTask,
+    taskCode: (TASKS[leadTask] || {}).code || '',
+    instanceId: '',
+    instanceIds: summary.eligible.map(function(item) { return item.id; }),
+    inlineHtml: renderPinnedInlinePending(uid, 'Batch Rerun'),
+    dockHtml: dockHtml
+  };
+}
+
+function buildBatchFreezeSummaryBullets(summary) {
+  var bullets = [];
+  if (summary.downstreamCount > 0) bullets.push('<li><strong>' + summary.downstreamCount + '</strong> downstream dependent task' + (summary.downstreamCount > 1 ? 's may be' : ' may be') + ' affected.</li>');
+  if (summary.activeInstanceCount > 0) bullets.push('<li><strong>' + summary.activeInstanceCount + '</strong> running/waiting instance' + (summary.activeInstanceCount > 1 ? 's are' : ' is') + ' still active.</li>');
+  if (summary.slaTaskCount > 0) bullets.push('<li><strong>' + summary.slaTaskCount + '</strong> selected task' + (summary.slaTaskCount > 1 ? 's are' : ' is') + ' found in SLA Manager.</li>');
+  return bullets.join('');
+}
+
+function batchFreezeTaskLinks(taskNames) {
+  return taskNames.map(function(taskName) {
+    return '<button type="button" class="batch-freeze-task-link" onclick="navToTask(\'' + taskName + '\')">' + taskName + '</button>';
+  }).join(', ');
+}
+
+function renderBatchFreezeInfoRow(uid, item, type) {
+  if (type === 'active') {
+    return '<div class="batch-freeze-review-row"><div class="batch-freeze-review-main"><div class="batch-freeze-review-task">' + item.taskName + '</div><div class="batch-freeze-review-sub">' + item.instances.map(function(inst) { return '<button type="button" class="batch-rerun-instance-link" onclick="navToInstance(\'' + inst.id + '\')">' + inst.id + '</button> <span class="status-badge ' + statusBadgeClass(inst.status) + '" style="font-size:10px;padding:0 5px;">' + inst.status + '</span>'; }).join('<br/>') + '</div></div></div>';
+  }
+  if (type === 'sla') {
+    return '<div class="batch-freeze-review-row"><div class="batch-freeze-review-main"><div class="batch-freeze-review-task">' + item.taskName + '</div><div class="batch-freeze-review-sub">' + item.slaManagers.map(function(sla) { return sla.name + ' (Priority: ' + sla.priority + ')'; }).join('<br/>') + '</div></div></div>';
+  }
+  return '<div class="batch-freeze-review-row"><div class="batch-freeze-review-main"><div class="batch-freeze-review-task">' + item.taskName + '</div><div class="batch-freeze-review-sub">' + item.downstream.length + ' downstream dependent task' + (item.downstream.length > 1 ? 's' : '') + ': ' + batchFreezeTaskLinks(item.downstream) + '</div></div></div>';
+}
+
+function renderBatchFreezeSection(uid, title, sectionKey, countLabel, rowsHtml) {
+  var state = batchFreezeState[uid];
+  var open = !!(state && state.openSections && state.openSections[sectionKey]);
+  return '<div class="batch-freeze-box"><div class="batch-freeze-box-head"><span>' + title + ' :</span><button type="button" class="batch-freeze-inline-link" onclick="toggleBatchFreezeSection(\'' + uid + '\',\'' + sectionKey + '\')">' + (open ? 'Hide' : 'View ' + countLabel) + '</button></div>' +
+    (open ? '<div class="batch-freeze-box-body">' + rowsHtml + '</div>' : '') +
+    '</div>';
+}
+
+function renderBatchFreezeIncludedSection(uid, includedTaskNames) {
+  var state = batchFreezeState[uid];
+  var open = !state || !state.openSections || state.openSections.included !== false;
+  return '<div class="batch-freeze-box"><div class="batch-freeze-box-head"><span>Tasks to Be Frozen :</span><button type="button" class="batch-freeze-inline-link" onclick="toggleBatchFreezeSection(\'' + uid + '\',\'included\')">' + (open ? 'Hide' : 'View ' + includedTaskNames.length) + '</button></div>' +
+    (open ? '<div class="batch-freeze-box-body">' + includedTaskNames.map(function(taskName) {
+      return '<div class="batch-freeze-review-row"><div class="batch-freeze-review-main"><div class="batch-freeze-review-task">' + taskName + '</div><div class="batch-freeze-review-sub">' + ((TASKS[taskName] || {}).code || '') + '</div></div><div class="batch-freeze-review-side"><button type="button" class="batch-freeze-mini-btn" onclick="navToTask(\'' + taskName + '\')">View</button></div></div>';
+    }).join('') + '</div>' : '') +
+    '</div>';
+}
+
+function renderBatchFreezeCard(uid) {
+  var state = batchFreezeState[uid];
+  if (!state) return '';
+  var includedTaskNames = Object.keys(state.included);
+  var summary = summarizeBatchFreezeState(state);
+  var warningBullets = buildBatchFreezeSummaryBullets(summary);
+  var activeSection = summary.tasksWithActive.length ? renderBatchFreezeSection(uid, 'Active Instances', 'active', String(summary.tasksWithActive.length), summary.tasksWithActive.map(function(item) { return renderBatchFreezeInfoRow(uid, item, 'active'); }).join('')) : '';
+  var slaSection = summary.tasksWithSla.length ? renderBatchFreezeSection(uid, 'SLA Manager', 'sla', String(summary.tasksWithSla.length), summary.tasksWithSla.map(function(item) { return renderBatchFreezeInfoRow(uid, item, 'sla'); }).join('')) : '';
+  var downstreamSection = summary.tasksWithDownstream.length ? renderBatchFreezeSection(uid, 'Downstream Impact', 'downstream', String(summary.tasksWithDownstream.length), summary.tasksWithDownstream.map(function(item) { return renderBatchFreezeInfoRow(uid, item, 'downstream'); }).join('')) : '';
+  var includedSection = renderBatchFreezeIncludedSection(uid, includedTaskNames);
+  var warningText = state.killChoice === 'yes' && summary.activeInstanceCount > 0
+    ? 'After freezing, included tasks will no longer be scheduled. Please confirm to terminate active instances immediately.'
+    : 'After freezing, included tasks will no longer be scheduled. Review the task list and related impact below before you confirm.';
+  var confirmLabel = state.killChoice === 'yes' && summary.activeInstanceCount > 0
+    ? 'Confirm Freeze and Kill ' + summary.activeInstanceCount
+    : 'Confirm ' + summary.includedCount;
+  return '<div class="r-card batch-freeze-card" id="' + uid + '-card" data-op="freeze-batch">' +
+    '<div class="batch-freeze-head"><div class="batch-freeze-title-wrap"><span class="batch-freeze-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/></svg></span><span class="batch-freeze-title">Batch Freeze Tasks</span></div></div>' +
+    '<div class="ac-body"><div class="ac-params batch-freeze-params" id="' + uid + '-params">' +
+      '<div class="batch-freeze-meta"><div class="batch-freeze-meta-line"><span class="batch-freeze-meta-label">Selected Tasks :</span><span class="batch-freeze-meta-value">' + state.selectedCount + '</span></div>' +
+      '<div class="batch-freeze-meta-line"><span class="batch-freeze-meta-label">Tasks to Be Frozen :</span><span class="batch-freeze-meta-value">' + summary.includedCount + '</span></div>' +
+      '</div>' +
+      '<div class="ac-warning batch-freeze-warning" id="' + uid + '-warning">' + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>' + warningText + (warningBullets ? '<ul class="batch-freeze-warning-list">' + warningBullets + '</ul>' : '') + '</div>' +
+      includedSection +
+      '<div class="batch-freeze-box"><div class="batch-freeze-box-head"><span>Kill Active Instances <span class="batch-freeze-help" title="Choose whether currently running or waiting instances should also be killed immediately.">?</span> :</span></div>' +
+      '<div class="batch-freeze-radio-group"><label class="ac-radio-label"><input type="radio" name="' + uid + '-freeze-batch-kill" value="no"' + (state.killChoice !== 'yes' ? ' checked' : '') + ' onchange="setBatchFreezeKillChoice(\'' + uid + '\',\'no\')"/> No (freeze task only)</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-freeze-batch-kill" value="yes"' + (state.killChoice === 'yes' ? ' checked' : '') + ' onchange="setBatchFreezeKillChoice(\'' + uid + '\',\'yes\')"/> Yes (terminate current running/waiting instances)</label></div></div>' +
+      activeSection + slaSection + downstreamSection +
+    '</div><div class="ac-btns" id="' + uid + '-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmBatchFreeze(\'' + uid + '\')"' + (summary.includedCount === 0 ? ' disabled' : '') + '>' + confirmLabel + '</button></div></div></div>';
+}
+
+function rerenderBatchFreezeCard(uid) {
+  var card = document.getElementById(uid + '-card');
+  if (!card || !batchFreezeState[uid]) return;
+  card.outerHTML = renderBatchFreezeCard(uid);
+  scrollActiveConv();
+}
+
+function genBatchFreezeConfirm(selection) {
+  var uid = 'dyn-' + Date.now();
+  var included = {};
+  (selection.items || []).forEach(function(item) {
+    included[item.taskName] = { taskName: item.taskName, taskCode: item.taskCode || ((TASKS[item.taskName] || {}).code || '') };
+  });
+  batchFreezeState[uid] = {
+    selectedCount: (selection.items || []).length,
+    included: included,
+    killChoice: 'no',
+    openSections: { included: true, active: true, sla: false, downstream: false }
+  };
+  return {
+    uid: uid,
+    opType: 'op_freeze',
+    opLabel: 'Batch Freeze',
+    level: 'task',
+    taskName: Object.keys(included)[0] || '',
+    taskCode: Object.keys(included)[0] ? ((TASKS[Object.keys(included)[0]] || {}).code || '') : '',
+    instanceId: '',
+    inlineHtml: renderPinnedInlinePending(uid, 'Batch Freeze'),
+    dockHtml: renderBatchFreezeCard(uid)
+  };
+}
+
 function genOperationConfirm(intent, ctx) {
   const name = ctx.taskName || 'update_table';
   const inst = ctx.instanceId;
   const taskCode = (TASKS[name] || TASKS.update_table).code;
   const uid = 'dyn-' + Date.now();
   var warnSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>';
-  var rerunIco = '<div class="r-card-ico" style="background:#F0F2F5"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></div>';
   if (intent.type === 'op_rerun') {
     var taskInstances = Object.entries(INSTANCES).filter(function(e) { return e[1].task === name; });
-    var instRow = '';
-    if (inst) {
-      instRow = '<div class="ac-row"><span class="ac-key">Instance Code</span><span class="ac-val" style="font-size:11px;">' + inst + '</span></div>';
-    } else if (taskInstances.length > 0) {
-      var opts = taskInstances.map(function(e) {
-        return '<option value="' + e[0] + '">' + e[0] + ' (' + e[1].status + ')</option>';
-      }).join('');
-      instRow = '<div class="ac-row"><span class="ac-key">Instance Code</span><span class="ac-val-edit"><select class="ac-select" style="font-size:11px;width:100%;max-width:320px;">' + opts + '</select></span></div>';
-    } else {
-      instRow = '<div class="ac-row"><span class="ac-key">Instance Code</span><span class="ac-val" style="font-size:11px;color:#FF4D4F;">No instances for this task</span></div>';
-    }
     var eventDateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     var eventName = eventDateStr + '_RERUN_' + name;
-    var dep = DEPS[name] || { up: [], down: [] };
-    var downInsts = [];
-    if (dep.down.length > 0) {
-      for (var di = 0; di < dep.down.length; di++) {
-        var dn = dep.down[di];
-        var dnInsts = Object.entries(INSTANCES).filter(function(e) { return e[1].task === dn; });
-        for (var dj = 0; dj < dnInsts.length; dj++) {
-          downInsts.push({ id: dnInsts[dj][0], task: dn, status: dnInsts[dj][1].status });
-        }
-      }
+    var resolvedViewInst = inst || (taskInstances.length > 0 ? taskInstances[0][0] : '');
+    var instanceField = '';
+    if (!inst) {
+      instanceField = '<div class="rerun-wizard-field"><label class="rerun-wizard-label">Instance Code:</label><select class="ac-select rerun-wizard-select" id="' + uid + '-instance-select">' +
+        taskInstances.map(function(e) {
+          return '<option value="' + e[0] + '">' + e[0] + ' (' + e[1].status + ')</option>';
+        }).join('') +
+        '</select></div>';
     }
-    var hasPauseResume = true;
-    var pauseResumeHtml = '';
-    if (hasPauseResume) {
-      pauseResumeHtml = '<div class="ac-row" id="' + uid + '-pause-row" style="align-items:flex-start;display:none;"><span class="ac-key">Pause and Resume</span><span class="ac-val-edit" style="flex-direction:column;align-items:stretch;gap:8px;">' +
-        '<div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#1890FF;cursor:pointer;" onclick="resetPauseResume(\'' + uid + '\')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1890FF" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Reset to Project Setting</div>' +
-        '<div class="op-inline-note">Add one or more pause windows for the rerun cascade. The table can scroll horizontally when the panel is narrow.</div>' +
-        '<div class="op-table-scroll"><table class="pr-table" id="' + uid + '-pr-table"><thead><tr><th>Pause At</th><th>Resume At</th><th>Pause running instance</th><th>Action</th></tr></thead><tbody>' +
-        '<tr><td><input class="ac-input" type="time" value="23:30" style="width:90px;"/></td><td><input class="ac-input" type="time" value="00:30" style="width:90px;"/></td><td><label class="toggle-switch"><input type="checkbox" checked/><span class="toggle-slider"></span></label></td><td><span class="pr-delete" onclick="deletePauseRow(this)">Delete</span></td></tr>' +
-        '</tbody></table></div>' +
-        '<div class="ac-add-btn" style="text-align:center;" onclick="addPauseRow(\'' + uid + '\')">+ Add</div>' +
-        '</span></div>';
-    }
-    var downstreamScopeHtml = '';
-    if (downInsts.length > 0) {
-      downstreamScopeHtml += '<div class="ac-row" id="' + uid + '-downstream-preview-row" style="align-items:flex-start;display:none;"><span class="ac-key">Downstream Instances</span><span class="ac-val-edit"><details class="inline-disclosure"><summary class="inline-disclosure-toggle">Downstream Instances (' + downInsts.length + ')</summary><div class="inline-disclosure-body"><div class="op-list-panel">';
-      for (var dii = 0; dii < downInsts.length; dii++) {
-        var bc = downInsts[dii].status === 'Failed' ? '#FF4D4F' : downInsts[dii].status === 'Running' ? '#1890FF' : downInsts[dii].status === 'Waiting' ? '#FAAD14' : '#52C41A';
-        downstreamScopeHtml += '<div class="op-list-item"><svg class="op-list-dot" width="6" height="6" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="' + bc + '"/></svg><span class="op-list-link" onclick="navToInstance(\'' + downInsts[dii].id + '\')">' + downInsts[dii].id + '</span><span style="color:#8C8C8C;">(' + downInsts[dii].status + ')</span></div>';
-      }
-      downstreamScopeHtml += '</div></div></details></span></div>';
-    } else if (dep.down.length > 0) {
-      downstreamScopeHtml += '<div class="ac-row" id="' + uid + '-downstream-preview-row" style="display:none;"><span class="ac-key">Downstream Tasks</span><span class="ac-val"><details class="inline-disclosure"><summary class="inline-disclosure-toggle">Downstream Tasks (' + dep.down.length + ')</summary><div class="inline-disclosure-body" style="font-size:11px;color:#595959;">' + dep.down.join(', ') + '</div></details></span></div>';
-    }
-
-    var summaryRow = '<div class="ac-row" style="align-items:flex-start;"><span class="ac-key">Summary On Rerun Completion</span><span class="ac-val-edit" style="flex-direction:column;align-items:stretch;"><div class="rerun-summary-list" id="' + uid + '-summary-list"></div><div class="ac-add-btn" style="text-align:center;" onclick="addRerunAlarmPolicy(\'' + uid + '\')">+ Add</div></span></div>';
-    var rerunContextBlock = '<div class="op-context-block">' +
-      '<div class="op-context-name">' + name + '</div>' +
-      '<div class="op-context-code">' + taskCode + '</div>' +
-      (inst ? '<div class="op-context-code">' + inst + '</div>' : '') +
+    var viewInstanceCtx = "{taskName:'" + name + "',instanceId:'" + resolvedViewInst + "'}";
+    var rerunWizardIcon = '<span class="rerun-wizard-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 002.13 3.36 9 9 0 0012.72 0A9 9 0 0021 12"/><path d="M23 20v-6h-6"/><path d="M20.49 9a9 9 0 00-2.13-3.36 9 9 0 00-12.72 0A9 9 0 003 12"/></svg></span>';
+    var nextSvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg>';
+    var step1Panel =
+      '<div class="op-step-panel rerun-wizard-panel" id="' + uid + '-step-1">' +
+        instanceField +
+        '<div class="rerun-wizard-field"><label class="rerun-wizard-label">Event Name:</label><input class="ac-input rerun-wizard-input" id="' + uid + '-event-name" type="text" value="' + eventName + '"/></div>' +
+        '<div class="rerun-wizard-field"><label class="rerun-wizard-label">Priority:</label><select class="ac-select rerun-wizard-select"><option value="lower">Lower priority than scheduled tasks</option><option value="same" selected>same priority as scheduled tasks (Recommended)</option><option value="higher">Higher priority than scheduled tasks</option></select></div>' +
+        '<div class="rerun-wizard-field last"><div class="rerun-wizard-label">Execution Scope:</div><div class="rerun-wizard-radio-stack">' +
+          '<label class="rerun-wizard-radio"><input type="radio" name="' + uid + '-downstream" value="no" checked onchange="toggleCascadeRerun(\'' + uid + '\',\'' + name + '\')"/> <span>Current instance only</span></label>' +
+          '<label class="rerun-wizard-radio"><input type="radio" name="' + uid + '-downstream" value="yes" onchange="toggleCascadeRerun(\'' + uid + '\',\'' + name + '\')"/> <span>Include Downstream (Cascade rerun)</span></label>' +
+        '</div></div>' +
       '</div>';
-    var rerunInstanceRow = inst ? '' : instRow.replace('Instance Code', 'Task Instance Code');
-    var rerunContextSection = buildOpSection('Execution Scope', 'Instance and downstream scope', 
-      rerunContextBlock +
-      rerunInstanceRow +
-      '<div class="ac-row"><span class="ac-key">Event Name</span><span class="ac-val-edit"><input class="ac-input" id="' + uid + '-event-name" type="text" value="' + eventName + '" style="font-size:11px;"/></span></div>' +
-      '<div class="ac-row"><span class="ac-key">Include Downstream</span><span class="ac-val-edit"><select class="ac-select" id="' + uid + '-downstream" onchange="toggleCascadeRerun(\'' + uid + '\',\'' + name + '\')"><option value="no" selected>No (rerun this instance only)</option><option value="yes">Yes (cascade rerun downstream)</option></select></span></div>' +
-      downstreamScopeHtml
-    , { open: true });
-    var rerunExecSection = buildOpSection('Execution Settings', 'Priority, dependency handling, DQC', 
-      '<div class="ac-row"><span class="ac-key">Priority</span><span class="ac-val-edit"><select class="ac-select"><option value="lower">Lower priority than scheduled tasks</option><option value="same" selected>Same priority as scheduled tasks (Recommended)</option><option value="higher">Higher priority than scheduled tasks</option></select></span></div>' +
-      '<div class="ac-row" id="' + uid + '-concurrency-row" style="display:none;"><span class="ac-key">Concurrency</span><span class="ac-val-edit"><div class="stepper-wrap"><button type="button" class="stepper-btn" onclick="stepConcurrency(this,-1)">-</button><input class="ac-input stepper-input" type="number" value="1" min="1" max="100" onchange="validateConcurrency(this)" onblur="validateConcurrency(this)"/><button type="button" class="stepper-btn" onclick="stepConcurrency(this,1)">+</button></div><span class="ac-hint">Range 1~100</span></span></div>' +
-      '<div class="ac-row" id="' + uid + '-skipdep-row"><span class="ac-key">Skip Dependency</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-skipdep" value="all"/> All</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-skipdep" value="none" checked/> None</label></span></div>' +
-      '<div class="ac-row"><span class="ac-key">Skip DQC</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-dqc" value="yes"/> Yes</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-dqc" value="no" checked/> No</label></span></div>'
-    , { collapsible: true, open: true });
-    var rerunNotificationSection = buildOpSection('Notifications', 'Completion summary, task alarms, and pause schedule',
-      summaryRow +
-      '<div class="ac-row"><span class="ac-key">Individual Task Alarms</span><span class="ac-val-edit"><label class="ac-radio-label"><input type="radio" name="' + uid + '-alarm" value="on" checked/> On</label><label class="ac-radio-label"><input type="radio" name="' + uid + '-alarm" value="off"/> Off</label></span></div>' +
-      pauseResumeHtml
-    , { collapsible: true, open: true });
+    var step2Panel =
+      '<div class="op-step-panel rerun-wizard-panel" id="' + uid + '-step-2" style="display:none;">' +
+        '<div class="rerun-wizard-field" id="' + uid + '-skipdep-row"><div class="rerun-wizard-label">Skip Dependency:</div><div class="rerun-wizard-radio-row">' +
+          '<label class="rerun-wizard-radio"><input type="radio" name="' + uid + '-skipdep" value="all"/> <span>All</span></label>' +
+          '<label class="rerun-wizard-radio"><input type="radio" name="' + uid + '-skipdep" value="none" checked/> <span>None</span></label>' +
+        '</div></div>' +
+        '<div class="rerun-wizard-field"><div class="rerun-wizard-label">Skip DQC:</div><div class="rerun-wizard-radio-row">' +
+          '<label class="rerun-wizard-radio"><input type="radio" name="' + uid + '-dqc" value="yes"/> <span>Yes</span></label>' +
+          '<label class="rerun-wizard-radio"><input type="radio" name="' + uid + '-dqc" value="no" checked/> <span>No</span></label>' +
+        '</div></div>' +
+        '<div class="rerun-wizard-field last"><div class="rerun-wizard-label">Individual Task Alarms:</div><label class="toggle-switch rerun-wizard-toggle"><input type="checkbox" name="' + uid + '-alarm-toggle" checked/><span class="toggle-slider"></span></label></div>' +
+      '</div>';
 
     var rerunShortcutSource = pendingActionShortcutSource &&
       pendingActionShortcutSource.opType === 'op_rerun' &&
       pendingActionShortcutSource.sessionId === (SessionManager.data.activeSessionId || null) &&
       pendingActionShortcutSource.instanceId === (inst || '') ? pendingActionShortcutSource : null;
     pendingActionShortcutSource = null;
-    var rerunStepHeader = '<div class="op-stepper"><span class="op-step-pill active" id="' + uid + '-step-tag-1">Step 1 · Scope</span><span class="op-step-pill" id="' + uid + '-step-tag-2">Step 2 · Settings</span></div>';
-    var rerunDockHtml = '<div class="r-card" id="' + uid + '-card" data-op="rerun"><div class="r-card-h">' + rerunIco + '<span class="r-card-t">Operation Confirmation: Rerun <span style="font-size:10px;background:#FFF1F0;color:#CF1322;padding:1px 6px;border-radius:3px;margin-left:4px;">Instance Level</span></span></div><div class="ac-body">' + rerunStepHeader + '<div class="ac-params" id="' + uid + '-params">' +
-'<div class="op-step-panel" id="' + uid + '-step-1">' + rerunContextSection + '</div>' +
-'<div class="op-step-panel" id="' + uid + '-step-2" style="display:none;">' + rerunExecSection + rerunNotificationSection + '</div>' +
-'</div><div class="ac-warning" id="' + uid + '-warning">' + warnSvg + 'New instance(s) will be generated based on the latest submitted code version. Execution starts immediately after confirmation.</div>' +
-'<div class="ac-btns" id="' + uid + '-btns"><div class="op-step-actions" id="' + uid + '-step1-btns"><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="setRerunStep(\'' + uid + '\',2)">Next</button></div>' +
-'<div class="op-step-actions" id="' + uid + '-step2-btns" style="display:none;"><button type="button" class="ac-btn cancel" onclick="setRerunStep(\'' + uid + '\',1)">Back</button><button type="button" class="ac-btn cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary" onclick="confirmDynRerun(\'' + uid + '\',\'' + name + '\',\'' + (inst || '') + '\')">Confirm</button></div></div></div></div>';
+    var rerunDockHtml = '<div class="r-card rerun-wizard-card" id="' + uid + '-card" data-op="rerun"><div class="rerun-wizard-head"><div class="rerun-wizard-head-left">' + rerunWizardIcon + '<span class="rerun-wizard-title" id="' + uid + '-rerun-title" data-base-title="Rerun Instance">Rerun Instance (1/2)</span></div><button type="button" class="rerun-wizard-view" onclick="linkTo(\'view-detail\',null,' + viewInstanceCtx + ')">View Instance</button></div><div class="ac-body rerun-wizard-body"><div class="ac-params rerun-wizard-params" id="' + uid + '-params">' +
+      step1Panel + step2Panel +
+      '</div><div class="ac-btns rerun-wizard-foot" id="' + uid + '-btns"><div class="op-step-actions" id="' + uid + '-step1-btns"><button type="button" class="ac-btn cancel rerun-wizard-cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary rerun-wizard-primary" onclick="setRerunStep(\'' + uid + '\',2)">Next ' + nextSvg + '</button></div>' +
+      '<div class="op-step-actions" id="' + uid + '-step2-btns" style="display:none;"><button type="button" class="rerun-wizard-prev" onclick="setRerunStep(\'' + uid + '\',1)"><span>&lt;</span> Previous</button><button type="button" class="ac-btn cancel rerun-wizard-cancel" onclick="cancelOperation(\'' + uid + '\')">Cancel</button><button type="button" class="ac-btn primary rerun-wizard-primary" onclick="confirmDynRerun(\'' + uid + '\',\'' + name + '\',\'' + (inst || '') + '\')">Confirm</button></div></div></div></div>';
     return {
       uid: uid,
       opType: 'op_rerun',
@@ -4006,13 +5657,15 @@ function resetPauseResume(uid) {
 
 function toggleCascadeRerun(uid, taskName) {
   var sel = document.getElementById(uid + '-downstream');
+  var checkedRadio = document.querySelector('input[name="' + uid + '-downstream"]:checked');
   var skipDepRow = document.getElementById(uid + '-skipdep-row');
   var concurrencyRow = document.getElementById(uid + '-concurrency-row');
   var pauseRow = document.getElementById(uid + '-pause-row');
   var downstreamPreviewRow = document.getElementById(uid + '-downstream-preview-row');
   var eventInput = document.getElementById(uid + '-event-name');
-  if (!sel) return;
-  var isCascade = sel.value === 'yes';
+  if (!sel && !checkedRadio) return;
+  var downstreamValue = checkedRadio ? checkedRadio.value : sel.value;
+  var isCascade = downstreamValue === 'yes';
   if (skipDepRow) skipDepRow.style.display = isCascade ? 'none' : '';
   if (concurrencyRow) concurrencyRow.style.display = isCascade ? '' : 'none';
   if (pauseRow) pauseRow.style.display = isCascade ? '' : 'none';
@@ -4057,6 +5710,32 @@ function confirmDynRerun(uid, taskName, instId) {
     if (rerunInline) rerunInline.outerHTML = rerunHtml;
     syncKillInlineMessage(uid, 'Rerun submitted successfully.');
     markActionShortcutCompleted(pendingKillOperation.sourceButtonId, pendingKillOperation.sourceSessionId || pendingKillOperation.sessionId, pendingKillOperation.sourceExecutedText || 'Rerun Submitted');
+  }
+  showToast('Submitted successfully!');
+  if (pendingKillOperation && pendingKillOperation.uid === uid) scheduleKillActionDockClose(uid);
+  scrollActiveConv();
+}
+
+function confirmBatchRerun(uid) {
+  var btns = document.getElementById(uid + '-btns');
+  if (btns && btns.classList.contains('disabled')) return;
+  if (btns) btns.classList.add('disabled');
+  var params = document.getElementById(uid + '-params');
+  var warning = document.getElementById(uid + '-warning');
+  if (params) params.classList.add('dimmed');
+  if (warning) warning.style.display = 'none';
+  var eventInput = document.querySelector('#' + uid + '-card input[id$="-event-name"]');
+  var eventName = eventInput ? eventInput.value : '';
+  var state = batchRerunState[uid];
+  var summary = state ? state.summary : { eligible: [], excluded: [] };
+  var leadTask = state ? state.leadTask : 'update_table';
+  var detailLink = '<a class="acd-link" onclick="navToRerunEvent(\'' + leadTask + '\',\'' + eventName + '\')">View Execution Details →</a>';
+  if (btns) btns.innerHTML = '<div class="ac-done confirmed"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">Submitted successfully</div><div class="acd-sub">' + summary.eligible.length + ' rerun instance(s) added to scheduler queue</div></div>' + detailLink + '</div>';
+  if (pendingKillOperation && pendingKillOperation.uid === uid) {
+    var batchInline = renderPinnedInlineBatchRerunSuccess(uid, eventName, summary, leadTask);
+    var inline = document.getElementById(uid + '-kill-inline');
+    if (inline) inline.outerHTML = batchInline;
+    syncKillInlineMessage(uid, 'Batch rerun submitted successfully.');
   }
   showToast('Submitted successfully!');
   if (pendingKillOperation && pendingKillOperation.uid === uid) scheduleKillActionDockClose(uid);
@@ -4331,6 +6010,36 @@ function confirmFreeze(uid, taskName) {
   scrollActiveConv();
 }
 
+function confirmBatchFreeze(uid) {
+  var btns = document.getElementById(uid + '-btns');
+  if (btns && btns.classList.contains('disabled')) return;
+  var state = batchFreezeState[uid];
+  if (!state) return;
+  var summary = summarizeBatchFreezeState(state);
+  if (!summary.includedCount) {
+    showToast('Please keep at least one task in this batch.');
+    return;
+  }
+  if (btns) btns.classList.add('disabled');
+  var params = document.getElementById(uid + '-params');
+  var warning = document.getElementById(uid + '-warning');
+  if (params) params.classList.add('dimmed');
+  if (warning) warning.style.display = 'none';
+  var detailText = state.killChoice === 'yes' && summary.activeInstanceCount > 0
+    ? 'Freeze submitted for ' + summary.includedCount + ' task(s); ' + summary.activeInstanceCount + ' active instance(s) will be terminated'
+    : 'Freeze submitted for ' + summary.includedCount + ' task(s)';
+  if (btns) btns.innerHTML = '<div class="ac-done confirmed"><div class="acd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#389E0D" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div><div class="acd-info"><div class="acd-text">' + detailText + '</div></div></div>';
+  if (pendingKillOperation && pendingKillOperation.uid === uid) {
+    var freezeInline = document.getElementById(uid + '-kill-inline');
+    var freezeHtml = renderPinnedInlineBatchFreezeSuccess(uid, state);
+    if (freezeInline) freezeInline.outerHTML = freezeHtml;
+    syncKillInlineMessage(uid, 'Batch freeze submitted successfully.');
+  }
+  showToast('Submitted successfully!');
+  if (pendingKillOperation && pendingKillOperation.uid === uid) scheduleKillActionDockClose(uid);
+  scrollActiveConv();
+}
+
 function confirmDynGeneric(uid, opName, taskName, instId, level) {
   const btns = document.getElementById(uid + '-btns');
   if (btns && btns.classList.contains('disabled')) return;
@@ -4491,6 +6200,27 @@ function genFollowUpSuggestions(intentType, ctx, userText) {
   var inst = ctx.instanceId || '';
   var suggestions = [];
   switch (intentType) {
+    case 'skill_run':
+      suggestions = [
+        'Open Skills',
+        'Find tasks without alarm policies',
+        'Check newly published tasks before official scheduling'
+      ];
+      break;
+    case 'skill_unavailable':
+      suggestions = [
+        'Open Skills',
+        'What can you do',
+        'List all tasks'
+      ];
+      break;
+    case 'diagnosis_rule_alarm':
+      suggestions = [
+        name ? 'Show alarm settings for task ' + name : 'Show alarm settings',
+        name ? 'Backfill task ' + name : 'Run backfill operation',
+        name ? 'Which alarm policies are bound to ' + name : 'Which alarm policies are bound'
+      ];
+      break;
     case 'diagnosis_failure':
       suggestions = [
         'View system log for ' + name,
@@ -4655,6 +6385,7 @@ function simulateSend() {
     showToast('Please confirm or cancel the pending operation first.');
     return;
   }
+  closeSkillSlashPicker();
   const input = document.getElementById('chatInput');
   const text = input.value.trim();
   if (!text) return;
@@ -4669,6 +6400,7 @@ async function simulateSendWithText(text) {
     showToast('Please confirm or cancel the pending operation first.');
     return;
   }
+  closeSkillSlashPicker();
   let conv = document.querySelector('.conv-container.active');
   if (!conv || conv.id === 'conv-welcome') {
     var newSession = SessionManager.createSession();
@@ -4692,11 +6424,29 @@ async function simulateSendWithText(text) {
   SessionManager.updateSession(activeConvId, { context: normalizeContext(currentContext) });
   let response = null;
   switch (intent.type) {
+    case 'skill_manage':
+      openSkillModal();
+      response = '__HANDLED__';
+      break;
+    case 'skill_run': {
+      var skill = SkillManager.getSkill(intent.skillId);
+      var version = skill && SkillManager.getVersion(skill, intent.versionId);
+      response = genSkillRunResult(skill, version, runSkillMock(skill, version, currentContext, false));
+      break;
+    }
+    case 'skill_unavailable': {
+      var unavailableSkill = SkillManager.getSkill(intent.skillId);
+      var unavailableVersion = unavailableSkill && SkillManager.getVersion(unavailableSkill, intent.versionId);
+      var matchedVersion = unavailableSkill && SkillManager.getVersion(unavailableSkill, intent.matchedVersionId);
+      response = genSkillUnavailable(unavailableSkill, unavailableVersion, matchedVersion);
+      break;
+    }
     case 'capability_intro': response = genCapabilityIntro(); break;
     case 'diagnosis_failure': response = genDiagnosisFailure(currentContext); break;
     case 'diagnosis_slow': response = genDiagnosisSlow(currentContext); break;
     case 'diagnosis_waiting': response = genDiagnosisWaiting(currentContext); break;
     case 'diagnosis_resource': response = genDiagnosisResource(currentContext); break;
+    case 'diagnosis_rule_alarm': response = genRuleAlarmDiagnosis(currentContext); break;
     case 'diagnosis_auto': {
       const _inf = currentContext.instanceId && INSTANCES[currentContext.instanceId];
       const _st = _inf ? _inf.status : 'Failed';
@@ -4742,7 +6492,10 @@ async function simulateSendWithText(text) {
     case 'op_kill':
     case 'op_skip_dep':
     case 'op_mark_success': {
-      if (!currentContext.taskName && !currentContext.instanceId) {
+      var batchRerunSelection = intent.type === 'op_rerun' ? buildBatchRerunSelection(text) : null;
+      if (batchRerunSelection) {
+        response = genBatchRerunConfirm(batchRerunSelection);
+      } else if (!currentContext.taskName && !currentContext.instanceId) {
         response = '<div class="response-wrap"><div class="msg-bubble" style="border:none;padding:10px 14px;">Please provide the <strong>instance ID</strong> for the operation (e.g. <code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">di_scheduler.studio_xxx_DAY_1</code>). I will generate an operation confirmation for you.<br><br>You can also use <strong>Inspect</strong> or <strong>Diagnose</strong> to locate specific instances first.</div></div>';
       } else {
         response = genOperationConfirm(intent, currentContext);
@@ -4755,7 +6508,10 @@ async function simulateSendWithText(text) {
     case 'op_priority':
     case 'op_trigger_now':
     case 'op_alarm': {
-      if (!currentContext.taskName) {
+      var batchFreezeSelection = intent.type === 'op_freeze' ? buildBatchFreezeSelection(text) : null;
+      if (batchFreezeSelection) {
+        response = genBatchFreezeConfirm(batchFreezeSelection);
+      } else if (!currentContext.taskName) {
         response = '<div class="response-wrap"><div class="msg-bubble" style="border:none;padding:10px 14px;">Please provide the <strong>task name</strong> for the operation (e.g. <code style="background:#F5F5F5;padding:1px 4px;border-radius:3px;">update_table</code>). I will generate an operation confirmation for you.</div></div>';
       } else {
         response = genOperationConfirm(intent, currentContext);
@@ -4767,10 +6523,11 @@ async function simulateSendWithText(text) {
   }
 
   const intentLabel = {
+    skill_manage: 'Skill Management', skill_run: 'Skill Run', skill_unavailable: 'Skill Unavailable',
     capability_intro: 'Capability Introduction',
     diagnosis_failure: 'Instance Failure Diagnosis', diagnosis_slow: 'Instance Slowdown Analysis', diagnosis_waiting: 'Instance Wait Analysis',
-    diagnosis_resource: 'Resource Analysis', diagnosis_auto: 'Intelligent Diagnosis', search_instances: 'Instance Search', search_tasks: 'Task Search', info_dependency: 'Dependency Query', info_code: 'Code Explanation', info_priority: 'Priority Query', patrol: 'Run Inspection',
-    op_rerun: 'Rerun Operation', op_backfill: 'Backfill', op_dqc: 'DQC Retry', op_priority: 'Priority Change', op_kill: 'Kill Operation', op_skip_dep: 'Skip Dependency', op_freeze: 'Freeze Operation', op_unfreeze: 'Unfreeze Operation', op_mark_success: 'Mark Success', op_trigger_now: 'Trigger Now', unsupported: 'Security Check'
+    diagnosis_resource: 'Resource Analysis', diagnosis_rule_alarm: 'Alarm Explanation', diagnosis_auto: 'Intelligent Diagnosis', search_instances: 'Instance Search', search_tasks: 'Task Search', info_dependency: 'Dependency Query', info_code: 'Code Explanation', info_priority: 'Priority Query', patrol: 'Run Inspection',
+    op_rerun: 'Rerun Operation', op_backfill: 'Backfill', op_dqc: 'DQC Retry', op_priority: 'Priority Change', op_kill: 'Kill Operation', op_skip_dep: 'Skip Dependency', op_freeze: 'Freeze Operation', op_unfreeze: 'Unfreeze Operation', op_mark_success: 'Mark Success', op_trigger_now: 'Trigger Now', op_alarm: 'Alarm Operation', unsupported: 'Security Check'
   }[intent.type] || intent.type || 'general';
 
   var activeS = SessionManager.getSession(activeConvId);
@@ -4787,11 +6544,24 @@ async function simulateSendWithText(text) {
     renderSessionTabs();
   }
 
-  const steps = [
+  let steps = [
     { icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>', text: 'Identify Intent: ' + intentLabel },
     { icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>', text: 'Query instance runtime status' },
     { icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5z"/></svg>', text: 'Generate response and suggestions' }
   ];
+  if (intent.type === 'diagnosis_rule_alarm') {
+    steps = [
+      { icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>', text: 'Identify Intent: ' + intentLabel },
+      { icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>', text: 'Check backfill event notification settings' },
+      { icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5z"/></svg>', text: 'Explain why the alarm was skipped' }
+    ];
+  } else if (intent.type === 'skill_run' || intent.type === 'skill_unavailable') {
+    steps = [
+      { icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>', text: 'Match user request to skill' },
+      { icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><path d="M9 12l2 2 4-4"/><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>', text: 'Check skill version and allowed tools' },
+      { icon: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5z"/></svg>', text: 'Generate read-only result and recommendations' }
+    ];
+  }
 
   var resolvedIntentType = intent.type;
   if (intent.type === 'diagnosis_auto') {
@@ -5187,6 +6957,7 @@ function renderAllInstancesTable() {
   if (countEl) countEl.textContent = entries.length + ' Search Results';
 }
 
+SkillManager.init();
 renderTaskListTable();
 renderAllInstancesTable();
 renderMarkerSearchTable();
